@@ -1,0 +1,26 @@
+[project]
+name = "scoped-llm"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "accelerate>=1.6.0",
+    "bitsandbytes>=0.45.5",
+    "datasets>=3.5.0",
+    "flash-attn>=2.7.4.post1",
+    "langchain>=0.3.24",
+    "langchain-anthropic>=0.3.12",
+    "langchain-community>=0.3.22",
+    "langchain-openai>=0.3.14",
+    "matplotlib>=3.10.1",
+    "python-dotenv>=1.1.0",
+    "replicate>=1.0.4",
+    "scikit-learn>=1.6.1",
+    "seaborn>=0.13.2",
+    "torch>=2.6.0",
+    "torchaudio>=2.6.0",
+    "torchvision>=0.21.0",
+    "transformers>=4.51.3",
+    "wandb>=0.19.10",
+]

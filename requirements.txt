@@ -1,0 +1,42 @@
+# PyTorch, Torchvision, Torchaudio should be installed separately first
+# using the official command for your CUDA version, e.g.:
+# pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
+
+auto-gptq
+trl
+
+bitsandbytes>=0.39.0
+datasets
+wandb
+transformers
+
+langchain
+langchain_community
+langchain_anthropic
+langchain_openai
+replicate
+
+scikit-learn
+matplotlib
+seaborn
+
+
+onnx
+onnxruntime
+
+
+
+
+# From: !pip install -U transformers unsloth bitsandbytes flash-attn -q
+# This upgrades transformers, unsloth, bitsandbytes, flash-attn.
+# Specific package entries are handled above/below.
+
+# From: !pip install git+https://github.com/unslothai/unsloth.git -q
+# This installs/overwrites unsloth from the specific git commit hash at the time of install.
+git+https://github.com/unslothai/unsloth.git
+
+# From: !pip install langchain langchain_anthropic langchain_openai -q
+
+
+
+
