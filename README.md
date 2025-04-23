@@ -1,9 +1,12 @@
 # Main Files Which Are Relevant
 utils/activation_utils/steering_layer.py <- Allows for activations to be collected and/or steered
+
 utils/dataset_utils <- Contains code to load in datasets
+
 utils/evaluation_utils <- Contains code to evaluate models
 
 llm_controllers <- Contains various classes for different types of steerers & scopers
+
 folder_of_shame <- Contains previous experiments
 
 # Main TODOs:
