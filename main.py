@@ -1,4 +1,7 @@
 import os
+#os.environ['CUDA_LAUNCH_BLOCKING'] = 1
+#os.environ['TORCH_USE_CUDA_DSA'] = 1
+
 from dotenv import load_dotenv
 
 import numpy as np
@@ -168,9 +171,7 @@ def visualize_steering(rank=0, world_size=0):
         print(f"Linear Steered: {linear_steerer.generate(prompt, max_length=20)}")
         print("\n")
         linear_steerer.clear_transformation_functions()
-
     
-
     selected_layers = None
 
     avg_steerer = ActAddSteerer(MODEL_NAME, selected_layers=selected_layers) # Uses LLMSteerer internally
@@ -277,8 +278,8 @@ def evaluate_persuade(config, steerer, test_texts ):
 
 def load_mmlu(training_examples, test_examples=10):
 
-    in_domain = MMLUDataset(sample_size=training_examples // 2, split='validation', domains=['high_school_chemistry'], in_domain=True). # domain='stem')
-    out_of_domain = MMLUDataset(sample_size=training_examples // 2, split='validation', domains=['high_school_chemistry'], in_domain=False).
+    in_domain = MMLUDataset(sample_size=training_examples // 2, split='validation', domains=['high_school_chemistry'], in_domain=True)
+    out_of_domain = MMLUDataset(sample_size=training_examples // 2, split='validation', domains=['high_school_chemistry'], in_domain=False)
 
     test_count = test_examples // 2
     test_indices = np.random.choice(len(out_of_domain), size=test_count, replace=False)
@@ -395,7 +396,7 @@ def my_sweep():
 
     param_grid = {
         'model': large_models,
-        'steerer_type': ['torch', 'pca', 'average'],
+        'steerer_type': ['average', 'pca', 'torch'],
         'target_layers': ['last_5', 'last_3', 'last', 'first', 'middle'],
         'steering_coeff': [5.0, 10.0, 0.5, 1.0],
         'dataset': ['persuade'],

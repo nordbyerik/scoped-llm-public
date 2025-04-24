@@ -245,9 +245,9 @@ for actionable_suffix in actionable_suffixes:
 actionable_examples = actionable_examples_extended
 
 non_actionable_examples_extended = []
-for refusal_suffix in discouraging_suffixes:
-    for mean_string in discouraging_examples:
-        discouraging_examples_extended.append(mean_string + " " + refusal_suffix)
+for non_actionable_suffix in non_actionable_suffixes:
+    for non_actionable_string in non_actionable_prompts:
+        non_actionable_examples_extended.append(non_actionable_string + " " + non_actionable_suffix)
 non_actionable_examples = non_actionable_examples_extended
 
 
