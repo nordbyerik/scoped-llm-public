@@ -1,7 +1,7 @@
+import numpy as np
 from datasets import load_dataset
 
-class MMLUDataset:
-    mmlu_subjects = {
+mmlu_subjects = {
             'stem': [
                 'abstract_algebra', 'astronomy', 'college_biology', 'college_chemistry',
                 'college_computer_science', 'college_mathematics', 'college_physics',
@@ -26,27 +26,53 @@ class MMLUDataset:
             ]
     }
 
-    @classmethod
-    def get_data(cls, sample_size=1000, split='validation', in_domain='stem'):
-        data = {'stem': [], 'non_stem': []}
+class MMLUDataset:
+    def __init__(self, sample_size=1000, split='validation', domains='stem', in_domain=True):
+        # Grab stem
+        if (domains == 'stem' and in_domain) or (domains == 'non_stem' and not in_domain):
+            domains = mmlu_subjects['stem']
+        # Grab non-stem
+        elif (domains == 'stem' and not in_domain) or (domains == 'non_stem' and in_domain):
+            domains = mmlu_subjects['non_stem']
+        # Grab all
+        elif (not in_domain):
+            out_domains = []
+            for category, subjects in mmlu_subjects.items():
+                for subject in subjects:
+                    if subject not in domains:
+                        out_domains.append(subject)
+            domains = out_domains
+        
 
+        self.data = self.get_data(sample_size, split, domains)
+    
+    def __len__(self):
+        return len(self.data)
+    
+    def __getitem__(self, index):
+        return self.data[index]
+
+    @classmethod
+    def get_data(cls, sample_size=1000, split='validation', domains=['astronomy']):
+        
+        data = []
         for category, subjects in cls.mmlu_subjects.items():
             for subject in subjects:
-                
+                if subject not in domains:
+                    continue
+
                 dataset = load_dataset("cais/mmlu", subject, split=split)
 
-                # Limit examples per subject
                 max_examples = min(len(dataset), sample_size // len(subjects))
+                indices = np.random.choice(len(dataset), size=max_examples, replace=False)
 
-                for i in range(max_examples):
+                for i in indices:
                     example = dataset[i]
-                    data[category].append({
-                        'subject': subject,
+                    data.append({
                         'question': example['question'],
                         'choices': [example['choices'][i] for i in range(4)],
                         'answer': example['answer']
                     })
-
 
         # Format MMLU examples for evaluation
         prompt_template = "Question: {question}\nA. {A}\nB. {B}\nC. {C}\nD. {D}\nAnswer:"
@@ -61,14 +87,8 @@ class MMLUDataset:
             )
             return formatted
 
-        positive_texts = []
-        negative_texts = []
-
-        for category, examples in data.items():
-            for example in examples:
-                formatted_example = format_mmlu_example(example, prompt_template)
-                if category == 'stem':
-                    positive_texts.append(formatted_example)
-                else:
-                    negative_texts.append(formatted_example)
-
+        formatted_data = []
+        for example in data.items():
+            formatted_example = format_mmlu_example(example, prompt_template)
+            formatted_data.append(formatted_example)
+        return formatted_data

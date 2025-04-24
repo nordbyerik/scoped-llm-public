@@ -76,6 +76,17 @@ discouraging_examples = discouraging_examples_extended
 
 class PersuadeDataset(Dataset):
 
+    def __init__(self, sentiment="neutral"):
+        super().__init__()
+        dataset = self.get_data()
+        self.dataset = self.get_sentiment_variations(dataset, sentiment)
+
+    def __len__(self):
+        return len(self.dataset)
+
+    def __getitem__(self, index):
+        return self.dataset[index]
+
     @staticmethod
     def get_data(sample_size=10):
         # Specify the repository information

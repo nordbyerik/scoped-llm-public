@@ -14,38 +14,16 @@ class InversePromptEngineer(LLMController):
         self.reward_models = [] # To store the trained reward models/guardrails [cite: 32]
         self.alpha = 0 # Uncertainty weighting factor [cite: 80] (default: 0)
 
-    def _generate_rollouts(self, prompt, inputs):
-        """
-        Generates completions from the LLM for given inputs and a prompt.
-        (Simulates y ~ pi(y|x;s) [cite: 65])
-
-        Args:
-            prompt (str): The system prompt to use.
-            inputs (list[str]): The list of inputs (x).
-
-        Returns:
-            list[str]: A list of generated completions (y).
-        """
+    def _generate_rollouts(self, prompt):
         completions = []
         for x in inputs:
             # This is a placeholder for actual LLM API call
-            completion = self.llm.generate(prompt=prompt, input_text=x)
+            completion = super().generate(prompt)
             completions.append(completion)
         return completions
 
     def _calculate_expected_reward(self, reward_model, prompt, inputs):
-        """
-        Estimates the expected reward for a prompt over the development set.
-        (Approximates E[r(x,y)|y~pi(y|x;s), x~X] [cite: 65, 71])
 
-        Args:
-            reward_model: The reward model being evaluated/trained.
-            prompt (str): The system prompt (s).
-            inputs (list[str]): The development set inputs (X).
-
-        Returns:
-            float: The estimated expected reward.
-        """
         completions = self._generate_rollouts(prompt, inputs)
         rewards = []
         for x, y in zip(inputs, completions):
@@ -55,16 +33,6 @@ class InversePromptEngineer(LLMController):
 
 
     def _approximate_ipe_likelihood(self, reward_model):
-        """
-        Approximates the IPE likelihood (or log-likelihood) for a given reward model.
-        (Based on Equations 1, 2, 3 [cite: 65, 71, 75])
-
-        Args:
-            reward_model: The reward model to evaluate.
-
-        Returns:
-            float: The approximate log-likelihood.
-        """
         # Calculate expected reward for the chosen prompt
         expected_reward_chosen = self._calculate_expected_reward(reward_model, self.chosen_prompt, self.dev_set)
 

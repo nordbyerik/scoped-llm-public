@@ -1,18 +1,17 @@
+import os
+from dotenv import load_dotenv
+
+import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
-import numpy as np
-import torch
-# from umap import UMAP # Uncomment if you have umap-learn installed and prefer UMAP
+import wandb
 from sklearn.metrics.pairwise import cosine_similarity
-import pandas as pd
-import numpy as np
-import torch.multiprocessing as mp
+
+import torch
 from torch.distributed import init_process_group, destroy_process_group
 import torch.distributed as dist
+from torch.utils.data import DataLoader
 
-# from umap import UMAP
-
-from utils.evaluation_utils.evaluator import FeedbackEvaluator
 from llm_controllers.steerers.prompt_steerer import PromptSteerer
 from llm_controllers.steerers.act_add_steerer import ActAddSteerer
 from llm_controllers.steerers.pca_steerer import PCASteerer
@@ -20,19 +19,9 @@ from llm_controllers.steerers.probe_activation_steerer import LinearProbeSteerer
 
 from utils.dataset_utils.persuade_dataset import PersuadeDataset
 from utils.dataset_utils.mmlu_dataset import MMLUDataset
+from utils.dataset_utils.sni_dataset import SNIDataset
 
-from torch.utils.data import DataLoader
-
-import torch
-import numpy as np
-import torch.distributed as dist
-
-import matplotlib.pyplot as plt
-import seaborn as sns
-
-import logging
-logger = logging.getLogger(__name__)
-
+from utils.evaluation_utils.evaluator import FeedbackEvaluator
 
 
 def plot_steering_vector(steering_vector, layer_name, k=20):
@@ -240,14 +229,8 @@ def visualize_steering(rank=0, world_size=0):
 
 
 
-import os
-import socket
-import torch
-import torch.distributed as dist
-import wandb
-from contextlib import closing # For finding free port safely
-
 def load_persuade(training_examples, test_examples=1):
+    # TODO: Do we want to roll this into the dataset itself?
     essays = PersuadeDataset().get_data()
     positive_prompts = PersuadeDataset().get_sentiment_variations(essays, "encouraging")
     negative_prompts = PersuadeDataset().get_sentiment_variations(essays, "discouraging")
@@ -258,7 +241,7 @@ def load_persuade(training_examples, test_examples=1):
     negative_texts = [negative_prompts[i] for i in indices] # Same fix for negative_texts
 
     test_indices = np.random.choice(len(neutral_prompts), size=test_examples, replace=False)
-    test_texts = [neutral_prompts[i] for i in range(3,6)] # Same fix for test_prompts
+    test_texts = [neutral_prompts[i] for i in test_indices] # Same fix for test_prompts
 
     return positive_texts, negative_texts, test_texts
 
@@ -292,11 +275,39 @@ def evaluate_persuade(config, steerer, test_texts ):
     return generated_outputs,total_steered_winner,percent_win
 
 
-def load_mmlu():
-    data = MMLUDataset.get_data()
+def load_mmlu(training_examples, test_examples=10):
 
-def load_sni():
-    pass
+    in_domain = MMLUDataset().get_data(sample_size=training_examples // 2, split='validation', in_domain='high_school_chemistry') # domain='stem')
+    out_of_domain = MMLUDataset().get_data(sample_size=len(in_domain), split='validation', out_domain='non_stem')
+
+    test_count = test_examples // 2
+    test_indices = np.random.choice(len(out_of_domain), size=test_count, replace=False)
+    test_questions = [out_of_domain[i] for i in test_indices] # Same fix for test_prompts
+    out_of_domain = [out_of_domain[i] for i in len(out_of_domain) if i not in test_indices]
+
+    test_indices = np.random.choice(len(in_domain), size=test_count, replace=False)
+    test_questions = [in_domain[i] for i in test_indices] # Same fix for test_prompts
+    in_domain = [in_domain[i] for i in len(in_domain) if i not in test_indices]
+
+    return in_domain, out_of_domain, test_questions
+
+
+def load_mmlu(training_examples, test_examples=10):
+
+    in_domain = SNIDataset().get_data(sample_size=training_examples // 2, split='validation', in_domain='high_school_chemistry') # domain='stem')
+    out_of_domain = SNIDataset().get_data(sample_size=len(in_domain), split='validation', out_domain='non_stem')
+
+    test_count = test_examples // 2
+    test_indices = np.random.choice(len(out_of_domain), size=test_count, replace=False)
+    test_questions = [out_of_domain[i] for i in test_indices] # Same fix for test_prompts
+    out_of_domain = [out_of_domain[i] for i in len(out_of_domain) if i not in test_indices]
+
+    test_indices = np.random.choice(len(in_domain), size=test_count, replace=False)
+    test_questions = [in_domain[i] for i in test_indices] # Same fix for test_prompts
+    in_domain = [in_domain[i] for i in len(in_domain) if i not in test_indices]
+
+    return in_domain, out_of_domain, test_questions
+
 
 def wand_b_iteration(config=None):
     """
@@ -400,8 +411,6 @@ def my_sweep():
         wand_b_iteration(config)
 
 
-from dotenv import load_dotenv
-import os
 if __name__ == '__main__':
     torch.cuda.empty_cache()
     load_dotenv()
