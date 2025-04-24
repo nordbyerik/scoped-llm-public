@@ -117,7 +117,7 @@ class ActivationController(LLMController):
         # ---> Create DistributedSampler if DDP is active <---
         sampler = DistributedSampler(texts, shuffle=False) if self.is_ddp else None # 
         dataloader = DataLoader(texts, batch_size=batch_size, sampler=sampler)
-
+        
         all_activations = {}  # Reset activations dictionary
         layers_to_calculate = []
         # Load from mem any that have already been completed
@@ -131,7 +131,8 @@ class ActivationController(LLMController):
                 all_activations[layer_number] = torch.load(path)
             else:
                 layers_to_calculate.append(layer_number)
-        
+
+
         if len(layers_to_calculate) == 0:
             return all_activations
 
@@ -156,7 +157,7 @@ class ActivationController(LLMController):
                     attention_out = False
 
                 outputs = self.model(**inputs, output_hidden_states=hidden_out, output_attentions=attention_out) # We only need activations via hooks
-
+            
             # Collect activations from hooks for this batch
             for layer_number in layers_to_calculate:
                 batch_hidden = outputs.hidden_states[layer_number]
@@ -198,7 +199,7 @@ class ActivationController(LLMController):
             if layer_name in layers_to_calculate:
                 all_activations_gathered[layer_name] = torch.stack(all_activations_gathered[layer_name])
 
-            path = os.path.join(self.save_folder_path, f"layer_{layer_number}_{activation_name}.pt")
+            path = os.path.join(self.save_folder_path, f"layer_{layer_name}_{activation_name}.pt")
             if not os.path.exists(path):
                 torch.save(all_activations_gathered[layer_name], path)
             

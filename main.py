@@ -1,7 +1,7 @@
 import os
-#os.environ['CUDA_LAUNCH_BLOCKING'] = 1
+os.environ['CUDA_LAUNCH_BLOCKING'] = "1"
 #os.environ['TORCH_USE_CUDA_DSA'] = 1
-
+print(f"CUDA_LAUNCH_BLOCKING: {os.environ.get('CUDA_LAUNCH_BLOCKING')}")
 from dotenv import load_dotenv
 
 import numpy as np
@@ -365,7 +365,7 @@ def wand_b_iteration(config=None):
 
 def wand_b_sweep():
 
-    large_models = ['Qwen/Qwen2.5-32B-Instruct', 'unsloth/Llama-3.3-70B-Instruct']
+    large_models = ['unsloth/Llama-3.3-70B-Instruct', 'Qwen/Qwen2.5-32B-Instruct']
     medium_models = None
     small_models_1 = ['unsloth/Llama-3.2-3B-Instruct', 'unsloth/Llama-3.2-1B-Instruct']
     small_models_2 = None
@@ -389,7 +389,7 @@ def wand_b_sweep():
 import itertools
 def my_sweep():
 
-    large_models = ['Qwen/Qwen2.5-32B-Instruct', 'unsloth/Llama-3.3-70B-Instruct']
+    large_models = ['unsloth/Llama-3.3-70B-Instruct', 'Qwen/Qwen2.5-32B-Instruct']
     medium_models = None
     small_models_1 = ['unsloth/Llama-3.2-3B-Instruct', 'unsloth/Llama-3.2-1B-Instruct']
     small_models_2 = None
