@@ -1,5 +1,6 @@
 from typing import List
 from llm_controllers.activation_controller import ActivationController
+from llm_controllers.llm_controller import LLMController
 from sklearn.model_selection import train_test_split
 
 import torch
@@ -141,13 +142,14 @@ class TorchModelSteerer(ActivationController):
                  model, 
                  selected_layers=None,
                  use_ddp=True,
+                 save_folder_path=".",
                  # Probe & Training Hyperparameters
                  learning_rate=0.001, 
                  epochs=10, 
                  batch_size=32,
                  probe_type='mlp',
                  model_config={'hidden_dim': 128, 'output_dim': 128, 'dropout_prob': 0.1}):
-        super().__init__(model, selected_layers=selected_layers, use_ddp=use_ddp)
+        super().__init__(model, selected_layers=selected_layers, use_ddp=use_ddp, save_folder_path=save_folder_path)
 
         self.best_layer = None
         self.best_model_state_dict = None
@@ -162,15 +164,16 @@ class TorchModelSteerer(ActivationController):
         self.model_config = model_config
 
         self.layer_configs = {}
+        self.layer_state_dicts = {}
 
-    def train_classifier(self, positive_texts, negative_texts):
+    def train_classifier(self, positive_texts, negative_texts, batch_size=1):
         # Ensure the target device is a torch device
 
         # Extract activations (assuming this returns a dict layer_name -> list of numpy arrays)
         # Make sure activations are extracted correctly (e.g., mean pooled per text)
-        positive_activations = self.extract_activations(positive_texts) # Keep extraction device potentially different
-        negative_activations = self.extract_activations(negative_texts)
-
+        positive_activations = self.extract_activations(positive_texts, batch_size, activation_name='positive') # Keep extraction device potentially different
+        negative_activations = self.extract_activations(negative_texts, batch_size, activation_name='negative')
+        
         results = {}
         layer_state_dicts = {}
         layer_configs = {}
@@ -183,18 +186,19 @@ class TorchModelSteerer(ActivationController):
         for layer_name in positive_activations:
 
             # Assuming list contains numpy arrays ready to be stacked
-            positive_examples = np.vstack(positive_activations[layer_name])
-            negative_examples = np.vstack(negative_activations[layer_name])
+            positive_examples = positive_activations[layer_name]
+            negative_examples = negative_activations[layer_name]
 
-            activation_dim = positive_examples.shape[1]
+            activation_dim = positive_examples.shape[-1]
 
             # --- Data Preparation ---
             # Correct label creation
-            labels_pos = np.ones(len(positive_examples), dtype=np.float32)
-            labels_neg = np.zeros(len(negative_examples), dtype=np.float32)
+            labels_pos = torch.ones((len(positive_examples), 1))
+            labels_neg = torch.zeros((len(positive_examples), 1)) 
 
-            all_activations_np = np.vstack((positive_examples, negative_examples))
-            all_labels_np = np.concatenate((labels_pos, labels_neg))
+            all_activations_np = torch.concat((positive_examples, negative_examples))
+            all_activations_np = all_activations_np.squeeze()
+            all_labels_np = torch.concat((labels_pos, labels_neg))
 
             # Split data
             X_train_np, X_test_np, y_train_np, y_test_np = train_test_split(
@@ -227,6 +231,8 @@ class TorchModelSteerer(ActivationController):
 
                     optimizer.zero_grad()
                     outputs = probe_model(batch_X)
+                    batch_y = batch_y.squeeze()
+                    outputs = outputs.squeeze()
                     loss = criterion(outputs, batch_y)
                     loss.backward()
                     optimizer.step()
@@ -271,108 +277,81 @@ class TorchModelSteerer(ActivationController):
         plt.ylabel('Accuracy')
         plt.title('Classification Accuracy by Layer (PyTorch Probe)')
         # Adjust labels if needed, e.g., rotate
-        plt.xticks(range(len(results)), [f"L {'.'.join(layer.split('.')[-2:])}" for layer in layers], rotation=45, ha='right')
+        plt.xticks(range(len(results)), [f"L {layer}" for layer in layers], rotation=45, ha='right')
         plt.tight_layout()
         plt.savefig('steering_output/layer_accuracies_pytorch.png')
         print("Results visualization saved to 'steering_output/layer_accuracies_pytorch.png'")
 
         # Store best model info in the instance
-        self.best_model_state_dict = best_model_state_dict
         self.best_model_input_dim = best_model_input_dim
         self.best_layer = best_layer
 
         self.layer_configs = layer_configs
+        self.layer_state_dicts = layer_state_dicts
 
         # Return layer name and best accuracy (or model info if needed)
         return self.best_layer, best_accuracy
 
-    def train(self, positive_texts, negative_texts):
+    def train(self, positive_texts, negative_texts, batch_size=1):
         return self.train_classifier(positive_texts, negative_texts)
 
     @torch.no_grad() # Disable gradients for the main generation loop
-    def generate(self, 
-                 prompts,
-                 max_length=50, 
-                 pnp_step_size=0.02, 
-                 pnp_target_label=1.0, 
-                 layers='all',
-                 batch_size=1
-                 ):
+    def generate(self, prompt, max_length=100, batch_size=1, coeff=1.0, vector_types=["all"], selected_layers=None):
+        # Clear to ensure not prior transformation functions
+        self.clear_transformation_functions()
 
-        """Generates text using PnP steering with the trained probe."""
+        if type(prompt) == str:
+            prompt = [prompt]
+        activations = self.extract_activations(prompt, batch_size=batch_size)
 
-        if layers == 'best':
-            layers = [self.best_layer]
-        elif layers == 'all':
-            layers = self.selected_layers
+        if selected_layers == 'best':
+            selected_layers = [self.best_layer]
+        elif selected_layers == 'all':
+            selected_layers = self.selected_layers
+        elif selected_layers is None:
+            selected_layers = self.selected_layers
+            
+        for layer_name in selected_layers:
+            layer_vector = None
 
-        # --- 4. Generation Loop ---
-        response = ""
-        self.clear_hooks()
-        activations = self.extract_activations(prompts, batch_size=batch_size)
-        for i, prompt in enumerate(prompts):
-            for step in range(max_length):
-                self.clear_hooks()
-                # Get activations
+            layer_config = self.layer_configs[layer_name]
 
-                for layer in layers:
-                    layer_config = self.layer_configs[layer]
+            # Recreate the probe model
+            probe_model = SimpleMLPProbe(
+                input_dim=layer_config['input_dim'],
+                hidden_dim=layer_config['hidden_dim'], 
+                output_dim=layer_config['output_dim']
+            ).to(self.device)
 
-                    # Recreate the probe model
-                    probe_model = SimpleMLPProbe(
-                        input_dim=layer_config['input_dim'],
-                        hidden_dim=layer_config['hidden_dim'], 
-                        output_dim=layer_config['output_dim']
-                    ).to(self.device)
+            probe_model.load_state_dict(self.layer_state_dicts[layer_name])
+            probe_model.eval()
 
-                    probe_model.load_state_dict(self.best_model_state_dict)
-                    probe_model.eval()
+            # Calculate steering vector
+            with torch.enable_grad():
+                h_t = torch.Tensor(activations[layer_name].squeeze()).to(self.device).to(torch.float32).requires_grad_(True)
+                logits_probe = probe_model(h_t).requires_grad_(True)
+                criterion = nn.BCEWithLogitsLoss()
+                # Ensure target label is float and on correct device
+                target = torch.full_like(logits_probe, float(1), device=self.device)
+                loss = criterion(logits_probe, target)
 
-                    # Calculate steering vector
-                    with torch.enable_grad():
-                        h_t = torch.Tensor(activations[layer][i]).to(self.device).to(torch.float32).requires_grad_(True)
-                        logits_probe = probe_model(h_t).requires_grad_(True)
-                        criterion = nn.BCEWithLogitsLoss()
-                        # Ensure target label is float and on correct device
-                        target = torch.full_like(logits_probe, float(pnp_target_label), device=self.device)
-                        loss = criterion(logits_probe, target)
+            # Backward pass to get gradient w.r.t. h_t
+            loss.backward()
+            grad = h_t.grad
 
-                    # Backward pass to get gradient w.r.t. h_t
-                    loss.backward()
-                    grad = h_t.grad
+            # TODO: Why norm? 
+            layer_vector = grad / (grad.norm(p=2, dim=-1, keepdim=True) + 1e-8)
+            def transformation_func(activation_tensor, vec=layer_vector, c=coeff, do_norm=True):
+                orig_norm = activation_tensor.norm(dim=-1, keepdim=True)
+                activation_tensor = activation_tensor + torch.Tensor(c * vec).to(activation_tensor.dtype).to(activation_tensor.device)
+                new_norm = activation_tensor.norm(dim=-1, keepdim=True)
+                norm_ratio = new_norm / orig_norm
 
-                    # TODO: Why norm? 
-                    norm_grad = grad / (grad.norm(p=2, dim=-1, keepdim=True) + 1e-8)
+                if norm_ratio.max().item() > 1 and do_norm:
+                    activation_tensor = activation_tensor / (norm_ratio) 
 
-                    def transformation_func(activation_tensor, vec=norm_grad, c=pnp_step_size):
-                        return activation_tensor - vec * c
+                return activation_tensor
+            self.set_transformation_function(layer_name, transformation_func)
 
-                    self.set_transformation_function(layer, transformation_func)
+        return LLMController.generate(self, prompt, max_length=max_length)
 
-                inputs = self.tokenizer(prompt, return_tensors="pt", truncation=True, max_length=self.model.config.max_position_embeddings - max_length).to(self.device)
-                attention_mask = inputs.attention_mask
-
-                with torch.no_grad():
-                    outputs = self.model(**inputs, output_hidden_states=False, use_cache=True, max_length=max_length)
-                
-                next_token = self.tokenizer.decode(
-                    outputs[0][inputs.input_ids.shape[1]:],
-                    batch_size=batch_size,
-                    skip_special_tokens=True
-                )
-
-                if attention_mask is not None:
-                    # Pad attention mask if needed by model.prepare_inputs
-                    attention_mask = torch.cat([attention_mask, torch.ones_like(next_token)], dim=1)
-
-                # --- Check for stopping ---
-                if self.tokenizer.eos_token_id is not None and (outputs[0][inputs.input_ids.shape[1]:] == self.tokenizer.eos_token_id).all():
-                    print("EOS token generated.")
-                    break
-
-                prompt += next_token
-                response += next_token
-
-
-        # 6. Decode result
-        return response

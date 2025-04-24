@@ -199,6 +199,8 @@ class ActivationController(LLMController):
             if layer_name in layers_to_calculate:
                 all_activations_gathered[layer_name] = torch.stack(all_activations_gathered[layer_name])
 
+            if activation_name is None:
+                continue
             path = os.path.join(self.save_folder_path, f"layer_{layer_name}_{activation_name}.pt")
             if not os.path.exists(path):
                 torch.save(all_activations_gathered[layer_name], path)
@@ -226,19 +228,24 @@ class ActivationController(LLMController):
                     layer_vector = torch.zeros_like(self.steering_vectors[vector_type][layer_name])
                 layer_vector += self.steering_vectors[vector_type][layer_name]
 
+            layer_vector = layer_vector / (layer_vector.norm(p=2, dim=-1, keepdim=True) + 1e-8)
             def transformation_func(activation_tensor, vec=layer_vector, c=coeff, do_norm=True):
                 orig_norm = activation_tensor.norm(dim=-1, keepdim=True)
                 activation_tensor = activation_tensor + torch.Tensor(c * vec).to(activation_tensor.dtype).to(activation_tensor.device)
                 new_norm = activation_tensor.norm(dim=-1, keepdim=True)
                 norm_ratio = new_norm / orig_norm
 
-                if norm_ratio.min().item() < 1 and do_norm:
+                if norm_ratio.max().item() > 1 and do_norm:
                     activation_tensor = activation_tensor * (norm_ratio) 
 
                 return activation_tensor
             self.set_transformation_function(layer_name, transformation_func)
         return super().generate(prompt, max_length=max_length)
     
+    def generate_uncontrolled(self, prompt, max_length=100):
+        self.clear_transformation_functions()
+        return super().generate(prompt, max_length=max_length)
+
     def visualize_activations(self, texts, layer_name, aggregation_calc="last", save_path=None):
         activations = self.extract_activations(texts, aggregation_calc=aggregation_calc)
 

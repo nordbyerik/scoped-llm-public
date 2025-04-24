@@ -231,8 +231,7 @@ def visualize_steering(rank=0, world_size=0):
 
 
 def load_persuade(training_examples, test_examples=1):
-    # TODO: Do we want to roll this into the dataset itself?
-    essays = PersuadeDataset().get_data()
+    essays = PersuadeDataset().get_data(training_examples)
     positive_prompts = PersuadeDataset().get_sentiment_variations(essays, "encouraging")
     negative_prompts = PersuadeDataset().get_sentiment_variations(essays, "discouraging")
     neutral_prompts = PersuadeDataset().get_sentiment_variations(essays, "neutral")
@@ -247,7 +246,7 @@ def load_persuade(training_examples, test_examples=1):
     return positive_texts, negative_texts, test_texts
 
 def evaluate_persuade(config, steerer, test_texts ):
-    default_model = PromptSteerer(config['model'], "{prompt}", False)
+    # default_model = PromptSteerer(config['model'], "{prompt}", False)
     feedback_evaluator = FeedbackEvaluator() # Provider might need API keys etc.
 
     local_steered_winner = 0 # Count wins for this rank's subset
@@ -259,7 +258,7 @@ def evaluate_persuade(config, steerer, test_texts ):
     for prompt in dataloader: # TODO: Can probably kick over to use DistributedDataset
         prompt = prompt[0]
         steered_output = steerer.generate(prompt, max_length=250, coeff=config['steering_coeff'])
-        unsteered_output = default_model.generate(prompt, max_length=250)
+        unsteered_output = steerer.generate_uncontrolled(prompt, max_length=250)
         generated_outputs.append([steered_output, unsteered_output])
 
         result = feedback_evaluator.compare_feedback(steered_output, unsteered_output) # Modify if comparing against well_prompted
@@ -316,6 +315,11 @@ def wand_b_iteration(config=None):
     torch.distributed for rank=0, world_size=1.
     """
 
+    try:
+        wandb.config.get('dataset')
+        config=wandb.config
+    except:
+        pass
 
     run = wandb.init(
         project="scoped-llm"
@@ -379,11 +383,12 @@ def wand_b_sweep():
         'name': 'sweep',
         'metric': {'goal': 'maximize', 'name': 'percent_win'},
         'parameters': {
-            'model': {'values': ['']},
+            'model': {'values': ['Qwen/Qwen2.5-7B-Instruct']},
             'steerer_type': {'values': ['average']}, # 'torch', 'linear_probe', 
             'target_layers': {'values': ['first', 'middle', 'last', 'last_3']},
             'steering_coeff': {'values': [0.5, 1.0, 5.0, 10.0]},
-            'training_examples': {'values': [100]},
+
+            'training_examples': {'value': [100]},
             'dataset': {'value': 'persuade'}
         },
     }
@@ -405,7 +410,7 @@ def my_sweep():
         'target_layers': ['last_5', 'last_3', 'last', 'first', 'middle'],
         'steering_coeff': [5.0, 10.0, 0.5, 1.0],
         'dataset': ['persuade'],
-        'training_examples': [100],
+        'training_examples': [1000],
         'batch_size': [1]
     }
 
@@ -421,6 +426,7 @@ if __name__ == '__main__':
     torch.cuda.empty_cache()
     load_dotenv()
     my_sweep()
+    wand_b_sweep()
 
 
 # NOTE: Ideal is 
