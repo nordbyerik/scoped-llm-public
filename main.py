@@ -277,8 +277,8 @@ def evaluate_persuade(config, steerer, test_texts ):
 
 def load_mmlu(training_examples, test_examples=10):
 
-    in_domain = MMLUDataset().get_data(sample_size=training_examples // 2, split='validation', in_domain='high_school_chemistry') # domain='stem')
-    out_of_domain = MMLUDataset().get_data(sample_size=len(in_domain), split='validation', out_domain='non_stem')
+    in_domain = MMLUDataset(sample_size=training_examples // 2, split='validation', domains=['high_school_chemistry'], in_domain=True). # domain='stem')
+    out_of_domain = MMLUDataset(sample_size=training_examples // 2, split='validation', domains=['high_school_chemistry'], in_domain=False).
 
     test_count = test_examples // 2
     test_indices = np.random.choice(len(out_of_domain), size=test_count, replace=False)
@@ -292,7 +292,7 @@ def load_mmlu(training_examples, test_examples=10):
     return in_domain, out_of_domain, test_questions
 
 
-def load_mmlu(training_examples, test_examples=10):
+def load_sni(training_examples, test_examples=10):
 
     in_domain = SNIDataset().get_data(sample_size=training_examples // 2, split='validation', in_domain='high_school_chemistry') # domain='stem')
     out_of_domain = SNIDataset().get_data(sample_size=len(in_domain), split='validation', out_domain='non_stem')
