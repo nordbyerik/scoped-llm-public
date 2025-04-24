@@ -315,10 +315,14 @@ def wand_b_iteration(config=None):
     Runs a single sweep trial, initializing and cleaning up
     torch.distributed for rank=0, world_size=1.
     """
+
+
     run = wandb.init(
-        project="scoped-llm",
-        config=config
+        project="scoped-llm"
     )
+    # wandb.config.get('dataset')
+    # config=wandb.config
+
     is_ddp = False
     try:
         torch.cuda.empty_cache()
@@ -375,10 +379,11 @@ def wand_b_sweep():
         'name': 'sweep',
         'metric': {'goal': 'maximize', 'name': 'percent_win'},
         'parameters': {
-            'model': {'values': ['unsloth/Llama-3.3-70B-Instruct']},
+            'model': {'values': ['']},
             'steerer_type': {'values': ['average']}, # 'torch', 'linear_probe', 
             'target_layers': {'values': ['first', 'middle', 'last', 'last_3']},
             'steering_coeff': {'values': [0.5, 1.0, 5.0, 10.0]},
+            'training_examples': {'values': [100]},
             'dataset': {'value': 'persuade'}
         },
     }
