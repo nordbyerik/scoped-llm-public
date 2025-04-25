@@ -118,13 +118,13 @@ encouraging_examples = [
     "Provide feedback that appreciates the creativity shown"
 ]
 
-encouraging_suffixes = [
+discouraging_suffixes = [
     "Wow this is trash ",
     "I threw up reading this ",
     "Please never write again "
 ]
 
-discouraging_suffixes = [
+encouraging_suffixes = [
     "Great Job! ",
     "I especially liked how ",
     "My favorite part "

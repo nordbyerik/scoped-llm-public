@@ -168,30 +168,16 @@ class FeedbackEvaluator:
         "{feedback2}"
 
         Consider the following aspects in your comparison:
-        1. Clarity and specificity
-        2. Actionability
-        3. Balance of positive and constructive elements
-        4. Alignment with learning goals
-        5. Potential impact on student motivation and learning
+        1. Enouraging Positive Motivational Beliefs and Self Esteem in the Student
 
         Return your comparison as a JSON object with the following structure:
         {{
             "winner": <1 or 2, indicating which feedback is better>,
             "score_difference": <a number from 0 to 10 indicating how much better the winner is>,
-            "aspects": [
-                {{
-                    "aspect": "Clarity and specificity",
-                    "feedback1_score": <score from 0 to 5>,
-                    "feedback2_score": <score from 0 to 5>,
-                    "explanation": "<explanation>"
-                }},
-                ...
-            ],
             "feedback1_strengths": ["<strength 1>", ...],
             "feedback1_weaknesses": ["<weakness 1>", ...],
             "feedback2_strengths": ["<strength 1>", ...],
-            "feedback2_weaknesses": ["<weakness 1>", ...],
-            "recommendation": "<recommendation for how the lower-rated feedback could be improved>"
+            "feedback2_weaknesses": ["<weakness 1>", ...]
         }}
         """
 

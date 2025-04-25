@@ -1,6 +1,6 @@
 import os
 os.environ['CUDA_LAUNCH_BLOCKING'] = "1"
-#os.environ['TORCH_USE_CUDA_DSA'] = 1
+os.environ['TORCH_USE_CUDA_DSA'] = "1"
 print(f"CUDA_LAUNCH_BLOCKING: {os.environ.get('CUDA_LAUNCH_BLOCKING')}")
 from dotenv import load_dotenv
 
@@ -230,7 +230,7 @@ def visualize_steering(rank=0, world_size=0):
 
 
 
-def load_persuade(training_examples, test_examples=1):
+def load_persuade(training_examples, test_examples=5):
     essays = PersuadeDataset().get_data(training_examples)
     positive_prompts = PersuadeDataset().get_sentiment_variations(essays, "encouraging")
     negative_prompts = PersuadeDataset().get_sentiment_variations(essays, "discouraging")
@@ -242,7 +242,6 @@ def load_persuade(training_examples, test_examples=1):
 
     test_indices = np.random.choice(len(neutral_prompts), size=test_examples, replace=False)
     test_texts = [neutral_prompts[i] for i in test_indices] # Same fix for test_prompts
-
     return positive_texts, negative_texts, test_texts
 
 def evaluate_persuade(config, steerer, test_texts ):
@@ -358,11 +357,15 @@ def wand_b_iteration(config=None):
             pass 
         columns = ['steered','unsteered']
         table = wandb.Table(data=generated_outputs, columns=columns)
+        
         wandb.log({ "percent_win": percent_win, "total_steered_wins": total_steered_winner, "texts": table})
-
+    except Exception as e:
+        print(f"Error on thi: {e}")
+        return {"config": config, "result": "failed"}
     finally:
         run.finish()
 
+    return {"config": config, "percent_win": percent_win, "total_steered_wins": total_steered_winner, "texts": generated_outputs, "result": "success"}
 
 
 def wand_b_sweep():
@@ -397,13 +400,14 @@ def my_sweep():
     small_models_1 = ['unsloth/Llama-3.2-3B-Instruct', 'unsloth/Llama-3.2-1B-Instruct', 'unsloth/Meta-Llama-3.1-8B']
     small_models_2 = None
 
+    logs = []
     param_grid = {
-        'model': ['unsloth/Llama-3.2-3B-Instruct'],
-        'steerer_type': ['average', 'pca', 'torch'],
-        'target_layers': ['last', 'first', 'middle'],
-        'steering_coeff': [5.0, 10.0, 0.5, 1.0],
+        'model': ['google/gemma-7b', 'unsloth/Llama-3.2-3B-Instruct'],
+        'steerer_type': ['torch', 'average',   'pca'],
+        'target_layers': ['last_5'],
+        'steering_coeff': [5.0, 2.0, 1.0 ],
         'dataset': ['persuade'],
-        'training_examples': [10],
+        'training_examples': [100],
         'batch_size': [1]
     }
 
@@ -412,7 +416,9 @@ def my_sweep():
     config_combinations = [dict(zip(keys, v)) for v in itertools.product(*values)]
 
     for i, config in enumerate(config_combinations):
-        wand_b_iteration(config)
+        results = wand_b_iteration(config)
+        with open("logs.txt", "a") as f:
+            f.write(str(results) + "\n")
 
 
 if __name__ == '__main__':
