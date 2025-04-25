@@ -33,7 +33,7 @@ class LLMController:
         self.model = AutoModelForCausalLM.from_pretrained(
             model_name,
             quantization_config=bnb_config,
-            attn_implementation="flash_attention_2", # "eager"
+            attn_implementation="eager", # "eager"
             low_cpu_mem_usage=True,
             trust_remote_code=True,
             device_map="auto",

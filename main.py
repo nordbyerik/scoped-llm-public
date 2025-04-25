@@ -318,11 +318,8 @@ def wand_b_iteration(config=None):
         project="scoped-llm"
     )
 
-    try:
-        wandb.config.get('dataset')
-        config=wandb.config
-    except:
-        pass
+    # config=wandb.config
+
 
 
     # wandb.config.get('dataset')
@@ -375,16 +372,15 @@ def wand_b_iteration(config=None):
 def wand_b_sweep():
 
     large_models = ['unsloth/Llama-3.3-70B-Instruct', 'Qwen/Qwen2.5-32B-Instruct']
-    medium_models = None
-    small_models_1 = ['unsloth/Llama-3.2-3B-Instruct', 'unsloth/Llama-3.2-1B-Instruct']
-    small_models_2 = None
+    small_models_1 = ['unsloth/Llama-3.2-3B-Instruct', 'unsloth/Llama-3.2-1B-Instruct', 'unsloth/Meta-Llama-3.1-8B']
+
 
     sweep_configuration = {
         'method': 'random',
         'name': 'sweep',
         'metric': {'goal': 'maximize', 'name': 'percent_win'},
         'parameters': {
-            'model': {'values': ['unsloth/Meta-Llama-3.1-8B-Instruct']},
+            'model': {'values': small_models_1},
             'steerer_type': {'values': ['average']}, # 'torch', 'linear_probe', 
             'target_layers': {'values': ['first', 'middle', 'last', 'last_3']},
             'steering_coeff': {'values': [0.5, 1.0, 5.0, 10.0]},
@@ -402,7 +398,7 @@ def my_sweep():
 
     large_models = ['unsloth/Llama-3.3-70B-Instruct', 'Qwen/Qwen2.5-32B-Instruct']
     medium_models = None
-    small_models_1 = ['unsloth/Llama-3.2-3B-Instruct', 'unsloth/Llama-3.2-1B-Instruct']
+    small_models_1 = ['unsloth/Llama-3.2-3B-Instruct', 'unsloth/Llama-3.2-1B-Instruct', 'unsloth/Meta-Llama-3.1-8B']
     small_models_2 = None
 
     param_grid = {
@@ -426,9 +422,10 @@ def my_sweep():
 if __name__ == '__main__':
     torch.cuda.empty_cache()
     load_dotenv()
-    wand_b_sweep()
 
     my_sweep()
+    wand_b_sweep()
+
 
 # NOTE: Ideal is 
 # - Combining multiple different vectors together
