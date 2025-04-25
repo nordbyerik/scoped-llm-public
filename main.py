@@ -315,14 +315,10 @@ def wand_b_iteration(config=None):
     torch.distributed for rank=0, world_size=1.
     """
     run = wandb.init(
-        project="scoped-llm"
+        project="scoped-llm",
+        config=config
     )
 
-    # config=wandb.config
-
-
-
-    # wandb.config.get('dataset')
     # config=wandb.config
 
     is_ddp = False
@@ -402,12 +398,12 @@ def my_sweep():
     small_models_2 = None
 
     param_grid = {
-        'model': ['unsloth/Meta-Llama-3.1-8B-Instruct'],
+        'model': ['unsloth/Llama-3.2-3B-Instruct'],
         'steerer_type': ['average', 'pca', 'torch'],
-        'target_layers': ['last_5', 'last_3', 'last', 'first', 'middle'],
+        'target_layers': ['last', 'first', 'middle'],
         'steering_coeff': [5.0, 10.0, 0.5, 1.0],
         'dataset': ['persuade'],
-        'training_examples': [1000],
+        'training_examples': [10],
         'batch_size': [1]
     }
 
