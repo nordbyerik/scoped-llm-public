@@ -33,7 +33,7 @@ class PersuadeDataset(Dataset):
 
         # Load the CSV into a pandas DataFrame
         essays = pd.read_csv(file_path)
-        short_essays = essays[essays['essay_word_count'] < 500]
+        short_essays = essays[essays['essay_word_count'] < 250]
         short_essays = short_essays.sample(n=sample_size)
         short_essays = short_essays.reset_index()
         short_essays_text = short_essays['full_text']

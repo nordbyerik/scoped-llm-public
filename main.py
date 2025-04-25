@@ -314,6 +314,9 @@ def wand_b_iteration(config=None):
     Runs a single sweep trial, initializing and cleaning up
     torch.distributed for rank=0, world_size=1.
     """
+    run = wandb.init(
+        project="scoped-llm"
+    )
 
     try:
         wandb.config.get('dataset')
@@ -321,9 +324,7 @@ def wand_b_iteration(config=None):
     except:
         pass
 
-    run = wandb.init(
-        project="scoped-llm"
-    )
+
     # wandb.config.get('dataset')
     # config=wandb.config
 
@@ -383,12 +384,12 @@ def wand_b_sweep():
         'name': 'sweep',
         'metric': {'goal': 'maximize', 'name': 'percent_win'},
         'parameters': {
-            'model': {'values': ['Qwen/Qwen2.5-7B-Instruct']},
+            'model': {'values': ['unsloth/Meta-Llama-3.1-8B-Instruct']},
             'steerer_type': {'values': ['average']}, # 'torch', 'linear_probe', 
             'target_layers': {'values': ['first', 'middle', 'last', 'last_3']},
             'steering_coeff': {'values': [0.5, 1.0, 5.0, 10.0]},
 
-            'training_examples': {'value': [100]},
+            'training_examples': {'value': 100},
             'dataset': {'value': 'persuade'}
         },
     }
@@ -405,7 +406,7 @@ def my_sweep():
     small_models_2 = None
 
     param_grid = {
-        'model': large_models,
+        'model': ['unsloth/Meta-Llama-3.1-8B-Instruct'],
         'steerer_type': ['average', 'pca', 'torch'],
         'target_layers': ['last_5', 'last_3', 'last', 'first', 'middle'],
         'steering_coeff': [5.0, 10.0, 0.5, 1.0],
@@ -425,9 +426,9 @@ def my_sweep():
 if __name__ == '__main__':
     torch.cuda.empty_cache()
     load_dotenv()
-    my_sweep()
     wand_b_sweep()
 
+    my_sweep()
 
 # NOTE: Ideal is 
 # - Combining multiple different vectors together

@@ -142,7 +142,7 @@ class ActivationController(LLMController):
             # Tokenize batch
             inputs = self.tokenizer(
                 batch_texts, return_tensors='pt', padding=True, truncation=True,
-                max_length=self.tokenizer.model_max_length # Adjust if needed
+                max_length=10000 # Adjust if needed
             ).to(self.model.device)
 
             # Run model forward pass for the batch

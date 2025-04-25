@@ -1,3 +1,16 @@
+# To Run
+For solid performance, try to run this on A series nvidia gpus
+
+Run the commands in the setup.sh file.
+
+Create a local .env file which contains
+- WANDB_API_KEY
+- HUGGINGFACE_TOKEN
+- ANTHROPIC_KEY
+- REPLICATE_KEY
+
+Run main.py
+
 # Main Files Which Are Relevant
 utils/activation_utils/steering_layer.py <- Allows for activations to be collected and/or steered
 
