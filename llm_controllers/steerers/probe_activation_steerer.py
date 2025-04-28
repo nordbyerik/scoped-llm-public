@@ -151,6 +151,8 @@ class TorchModelSteerer(ActivationController):
                  model_config={'hidden_dim': 128, 'output_dim': 128, 'dropout_prob': 0.1}):
         super().__init__(model, selected_layers=selected_layers, use_ddp=use_ddp, save_folder_path=save_folder_path)
 
+        self.model_name = model
+
         self.best_layer = None
         self.best_model_state_dict = None
         self.best_model_input_dim = None
@@ -166,7 +168,7 @@ class TorchModelSteerer(ActivationController):
         self.layer_configs = {}
         self.layer_state_dicts = {}
 
-    def train_classifier(self, positive_texts, negative_texts, batch_size=1):
+    def train_classifier(self, positive_texts, negative_texts, batch_size=1, model_name=''):
         # Ensure the target device is a torch device
 
         # Extract activations (assuming this returns a dict layer_name -> list of numpy arrays)
@@ -279,7 +281,8 @@ class TorchModelSteerer(ActivationController):
         # Adjust labels if needed, e.g., rotate
         plt.xticks(range(len(results)), [f"L {layer}" for layer in layers], rotation=45, ha='right')
         plt.tight_layout()
-        plt.savefig('steering_output/layer_accuracies_pytorch.png')
+        replaced_string = self.model_name.replace("/", "_").replace('.', '_')
+        plt.savefig(f'steering_output/layer_accuracies_pytorch_{replaced_string}.png')
         print("Results visualization saved to 'steering_output/layer_accuracies_pytorch.png'")
 
         # Store best model info in the instance

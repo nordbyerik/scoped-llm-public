@@ -1,6 +1,6 @@
 import os
-os.environ['CUDA_LAUNCH_BLOCKING'] = "1"
-os.environ['TORCH_USE_CUDA_DSA'] = "1"
+# os.environ['CUDA_LAUNCH_BLOCKING'] = "1"
+# os.environ['TORCH_USE_CUDA_DSA'] = "1"
 print(f"CUDA_LAUNCH_BLOCKING: {os.environ.get('CUDA_LAUNCH_BLOCKING')}")
 from dotenv import load_dotenv
 
@@ -242,9 +242,10 @@ def load_persuade(training_examples, test_examples=5):
 
     test_indices = np.random.choice(len(neutral_prompts), size=test_examples, replace=False)
     test_texts = [neutral_prompts[i] for i in test_indices] # Same fix for test_prompts
-    return positive_texts, negative_texts, test_texts
+    unformatted_test_texts = [essays[i] for i in test_indices]
+    return positive_texts, negative_texts, test_texts, unformatted_test_texts
 
-def evaluate_persuade(config, steerer, test_texts ):
+def evaluate_persuade(config, steerer, test_texts, encouraging=False ):
     # default_model = PromptSteerer(config['model'], "{prompt}", False)
     feedback_evaluator = FeedbackEvaluator() # Provider might need API keys etc.
 
@@ -256,11 +257,19 @@ def evaluate_persuade(config, steerer, test_texts ):
     generated_outputs = []
     for prompt in dataloader: # TODO: Can probably kick over to use DistributedDataset
         prompt = prompt[0]
+
+        encouraging_prompt = f"Essay: {prompt} Request: Provide feedback for this essay."
+        prompt = f"Essay: {prompt} Request: Give kind feedback for this essay which is encouraging"
+
         steered_output = steerer.generate(prompt, max_length=250, coeff=config['steering_coeff'])
-        unsteered_output = steerer.generate_uncontrolled(prompt, max_length=250)
+        if not encouraging:
+            unsteered_output = steerer.generate_uncontrolled(prompt, max_length=250)
+        else:
+            unsteered_output = steerer.generate_uncontrolled(encouraging_prompt, max_length=250)
         generated_outputs.append([steered_output, unsteered_output])
 
         result = feedback_evaluator.compare_feedback(steered_output, unsteered_output) # Modify if comparing against well_prompted
+   
         if result and result.get('winner') == 1:
             local_steered_winner += 1
 
@@ -325,7 +334,7 @@ def wand_b_iteration(config=None):
         torch.cuda.empty_cache()
 
         if config['dataset'] == 'persuade':
-            positive_texts, negative_texts, test_texts = load_persuade(config['training_examples'])
+            positive_texts, negative_texts, test_texts, unformatted_test_texts = load_persuade(config['training_examples'])
 
         model_name = config['model'].replace('.', '_').replace('/', '_')
         filename = f"{model_name}_{config['steerer_type']}_vectors"
@@ -353,6 +362,8 @@ def wand_b_iteration(config=None):
 
         if config['dataset'] == 'persuade':
             generated_outputs, total_steered_winner, percent_win = evaluate_persuade(config, steerer, test_texts)
+            generated_outputs_encouraging, total_steered_winner_encouraging, percent_win_encouraging = evaluate_persuade(config, steerer, test_texts, encouraging=True )
+ 
         elif config['dataset'] == 'mmlu':
             pass 
         columns = ['steered','unsteered']
@@ -365,7 +376,7 @@ def wand_b_iteration(config=None):
     finally:
         run.finish()
 
-    return {"config": config, "percent_win": percent_win, "total_steered_wins": total_steered_winner, "texts": generated_outputs, "result": "success"}
+    return {"config": config, "percent_win": percent_win, "percent_win_encourgaging": percent_win_encouraging, "texts": generated_outputs, "result": "success"}
 
 
 def wand_b_sweep():
@@ -397,17 +408,17 @@ def my_sweep():
 
     large_models = ['unsloth/Llama-3.3-70B-Instruct', 'Qwen/Qwen2.5-32B-Instruct']
     medium_models = None
-    small_models_1 = ['unsloth/Llama-3.2-3B-Instruct', 'unsloth/Llama-3.2-1B-Instruct', 'unsloth/Meta-Llama-3.1-8B']
+    small_models_1 = ['unsloth/Llama-3.2-3B-Instruct', ]
     small_models_2 = None
 
     logs = []
     param_grid = {
-        'model': ['google/gemma-7b', 'unsloth/Llama-3.2-3B-Instruct'],
+        'model': ['unsloth/Llama-3.2-1B-Instruct', 'google/gemma-7b', 'unsloth/Llama-3.2-3B-Instruct', 'unsloth/Meta-Llama-3.1-8B', ''],
         'steerer_type': ['torch', 'average',   'pca'],
         'target_layers': ['last_5'],
-        'steering_coeff': [5.0, 2.0, 1.0 ],
+        'steering_coeff': [5.0, 1.0, 0.5, 0.25 ],
         'dataset': ['persuade'],
-        'training_examples': [100],
+        'training_examples': [250],
         'batch_size': [1]
     }
 
