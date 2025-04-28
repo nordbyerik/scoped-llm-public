@@ -413,8 +413,8 @@ def my_sweep():
 
     logs = []
     param_grid = {
-        'model': ['unsloth/Llama-3.2-1B-Instruct', 'google/gemma-7b', 'unsloth/Llama-3.2-3B-Instruct', 'unsloth/Meta-Llama-3.1-8B', ''],
-        'steerer_type': ['torch', 'average',   'pca'],
+        'model': ['google/gemma-7b'],
+        'steerer_type': [ 'pca'],
         'target_layers': ['last_5'],
         'steering_coeff': [5.0, 1.0, 0.5, 0.25 ],
         'dataset': ['persuade'],
