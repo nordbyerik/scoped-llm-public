@@ -1,14 +1,20 @@
 import torch
+import torch.nn.functional as F
+import numpy as np
+
 from llm_controllers.llm_controller import LLMController
+from utils.evaluation_utils.output_parser import MultipleChoiceLogitParser
 
 class HardenedPromptScoper(LLMController):
-    def __init__(self, model, prompt_template, use_ddp):
+    def __init__(self, model, hardened_prompt_template, use_ddp):
         super().__init__(model, use_ddp)
-        self.prompt_template = prompt_template
+        self.hardened_prompt_template = hardened_prompt_template
 
-    def generate(self, prompt, max_length=100):
-        full_prompt = self.prompt_template.format(prompt=prompt)
-        return super().generate(full_prompt, max_length=max_length)
+    def generate(self, prompts, max_length=100):
+        classifier_prompts = self.hardened_prompt_template.format(prompt=prompts)
+        inputs = self.tokenizer(classifier_prompts, return_tensors="pt", padding=True, truncation=True).to(self.model.device)
+        responses = self.model(**inputs)
+        return responses
 
 
 class PromptClassificationScoper(LLMController):
@@ -16,14 +22,33 @@ class PromptClassificationScoper(LLMController):
         super().__init__(model, use_ddp)
         self.prompt_classifier_template = prompt_classifier_template
 
-    def logit_parser(self, logits):
-        pass
+    def check_domain(self, prompts):
+        classifier_prompts = self.prompt_classifier_template.format(prompt=prompts)
+        inputs = self.tokenizer(classifier_prompts, return_tensors="pt", padding=True, truncation=True).to(self.model.device)
+        responses = self.model(**inputs)
+        logits = responses.logits
+        parser = MultipleChoiceLogitParser(["No", "Yes"])
+        responses = parser(logits, self.tokenizer)
+        return responses
 
-    def text_parser(self, text):
-        pass
+    def generate(self, prompts, max_length=100):
+        checked_domain = self.check_domain(prompts)
 
-    def generate(self, prompt, max_length=100):
-        classifier_prompt = self.prompt_classifier_template.format(prompt=prompt)
-        response = super().generate(classifier_prompt, max_length=max_length)
+        classifier_prompts = self.prompt_classifier_template.format(prompt=prompts)
+        inputs = self.tokenizer(classifier_prompts, return_tensors="pt", padding=True, truncation=True).to(self.model.device)
+        responses = self.model(**inputs)
+
+                
+        original_type = type(responses.logits)
+        device = responses.logits.device
+        logits_array = np.array(responses.logits.detach().cpu())
+        for i, c in enumerate(checked_domain):
+            if c != 1:
+                logits_array[i] = torch.Tensor([-1])
+        responses.logits = original_type(torch.Tensor(logits_array).to(device))
+        
+
+
+        return responses
 
 

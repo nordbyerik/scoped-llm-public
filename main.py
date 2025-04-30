@@ -14,7 +14,7 @@ from sklearn.metrics.pairwise import cosine_similarity
 import torch
 from torch.distributed import init_process_group, destroy_process_group
 import torch.distributed as dist
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, ConcatDataset, DataLoader
 
 from llm_controllers.steerers.prompt_steerer import PromptSteerer
 from llm_controllers.steerers.act_add_steerer import ActAddSteerer
@@ -88,38 +88,34 @@ def load_mmlu(domains: List[str], training_examples=100, train_test_split=0.8):
     in_domain = MMLUDataset(sample_size=training_examples // 2, split='test', domains=domains, in_domain=True)
     out_of_domain = MMLUDataset(sample_size=training_examples // 2, split='test', domains=domains, in_domain=False)
 
-    test_count = int(len(in_domain)*(1-train_test_split) // 2)
-    test_indices = np.random.choice(len(out_of_domain), size=test_count, replace=False if test_count < len(out_of_domain) else True)
-    test_questions_ood = [out_of_domain[i][0] for i in test_indices] # Same fix for test_prompts
-    test_answers_ood = [out_of_domain[i][1] for i in test_indices]
-    out_of_domain = [out_of_domain[i][0] for i in range(len(out_of_domain)) if i not in test_indices]
 
-    test_count = int(len(out_of_domain)*(1-train_test_split) // 2)
-    test_indices = np.random.choice(len(in_domain), size=test_count, replace=False if test_count < len(in_domain) else True)
-    test_questions_in_domain = [in_domain[i][0] for i in test_indices] # Same fix for test_prompts
-    test_answers_in_domain = [in_domain[i][1] for i in test_indices]
-    in_domain = [in_domain[i][0] for i in range(len(in_domain)) if i not in test_indices]
+    # For out-of-domain data
+    ood_total = len(out_of_domain)
+    ood_test_count = int(ood_total * (1-train_test_split))
+    ood_test_indices = np.random.choice(ood_total, size=ood_test_count, replace=False if ood_test_count < ood_total else True)
+    ood_train_indices = [i for i in range(ood_total) if i not in ood_test_indices]
+    test_ood = out_of_domain[ood_test_indices]
+    train_ood = out_of_domain[ood_train_indices]
 
-    test_questions = test_questions_ood + test_questions_in_domain
-    test_answers = test_answers_ood + test_answers_in_domain
+    # For in-domain data
+    in_total = len(in_domain)
+    in_test_count = int(in_total * (1-train_test_split))
+    in_test_indices = np.random.choice(in_total, size=in_test_count, replace=False if in_test_count < in_total else True)
+    in_train_indices = [i for i in range(in_total) if i not in in_test_indices]
+    test_in_domain = in_domain[in_test_indices]
+    train_in_domain = in_domain[in_train_indices]
 
-    return in_domain, out_of_domain, test_questions, test_answers
+    # Combine test datasets
+    test_dataset = MMLUDataset.__new__(MMLUDataset)
+    test_dataset.data = test_ood.data + test_in_domain.data
+    test_dataset.answers = test_ood.answers + test_in_domain.answers
+    test_dataset.in_domain = [0]*len(test_ood) + [1]*len(test_in_domain)
 
+    # Update training datasets
+    out_of_domain = train_ood
+    in_domain = train_in_domain
+    return in_domain, out_of_domain, test_dataset
 
-def evaluate_mmlu(config, scoper, test_questions, test_answers, parser_type="logits"):
-    mmlu_evaluator = MMLUEvaluator(scoper.tokenizer, parser_type) # Provider might need API keys etc.
-
-    dataloader = DataLoader(test_questions, batch_size=10)
-    
-    test_count = 0
-    running_accuracy = 0
-    for prompts in dataloader: # TODO: Can probably kick over to use DistributedDataset
-        steered_output = scoper(prompts).logits
-
-        test_count += len(prompts)
-        running_accuracy += mmlu_evaluator(steered_output, test_answers)
-        
-    return running_accuracy/test_count
 
 
 
@@ -129,16 +125,16 @@ def mmlu_iteration(config=None):
     torch.distributed for rank=0, world_size=1.
     """
     run = wandb.init(
-        project="scoped-llm",
-        config=config
+        project="scoped-llm"
     )
+    config = wandb.config
 
-    # config=wandb.config
+
 
     try:
         torch.cuda.empty_cache()
 
-        in_domain, out_of_domain, test_questions, test_answers = load_mmlu(domains=config['domains'], training_examples=config['training_examples'])
+        in_domain, out_of_domain, test_dataset = load_mmlu(domains=config['domains'], training_examples=config['training_examples'])
         model_name = config['model'].replace('.', '_').replace('/', '_')
         filename = f"{model_name}_{config['scoper_type']}_vectors"
         folder = os.path.join(os.getcwd(), "scoping_activations")
@@ -153,17 +149,30 @@ def mmlu_iteration(config=None):
         if not os.path.exists(folder):
             os.makedirs(folder)
 
+        mmlu_evaluator = MMLUEvaluator(scoper.tokenizer, 'logits') # Provider might need API keys etc.
+
+        questions = test_dataset.data
+        batch_size = 5
+
+        steered_output = None
+        for i in range(0, len(questions), batch_size):
+            batch = questions[i:i + batch_size]
+            batch_steered_output = scoper(batch).logits
+            batch_steered_output = batch_steered_output[:, -1]
+            if steered_output is None:
+                steered_output = torch.zeros((len(questions), batch_steered_output.shape[-1]))
+            steered_output[i:i + batch_size] = batch_steered_output
+
+        in_domain_accuracy, out_of_domain_accuracy, accuracy, precision, recall, f1_score = mmlu_evaluator(steered_output, test_dataset)
         
-        accuracy = evaluate_mmlu(config, scoper, test_questions, test_answers)
-        
-        wandb.log({ "accuarcy": accuracy})
+        wandb.log({"accuracy": accuracy, "precision": precision, "recall": recall, "f1_score": f1_score, "in_domain_accuracy": in_domain_accuracy, "out_of_domain_accuracy": out_of_domain_accuracy, "result": "success"})
     except Exception as e:
         print(f"Error on thi: {e}")
         return {"config": config, "result": "failed"}
     finally:
         run.finish()
 
-    return {"config": config, "accuracy": accuracy}
+    return {"config": config, "accuracy": accuracy, "precision": precision, "recall": recall, "f1_score": f1_score, "in_domain_accuracy": in_domain_accuracy, "out_of_domain_accuracy": out_of_domain_accuracy, "result": "success"}
 
 
 def wand_b_sweep():
@@ -177,35 +186,30 @@ def wand_b_sweep():
         'name': 'sweep',
         'metric': {'goal': 'maximize', 'name': 'percent_win'},
         'parameters': {
-            'model': {'values': small_models_1},
-            'steerer_type': {'values': ['average']}, # 'torch', 'linear_probe', 
-            'target_layers': {'values': ['first', 'middle', 'last', 'last_3']},
-            'steering_coeff': {'values': [0.5, 1.0, 5.0, 10.0]},
-
-            'training_examples': {'value': 100},
-            'dataset': {'value': 'persuade'}
+            'model': {'values': ['unsloth/Llama-3.2-3B-Instruct']},
+            'scoper_type':{'values': ['linear_probe_scoper']}, # 'torch', 'linear_probe', 
+            'domains': {'values': [["astronomy", "prehistory"]]},
+            'dataset': {'value': 'mmlu'},
+            'training_examples': {'value': 1000},
+            'test_examples': {'value': 100},
+            'batch_size': {'value': 10}
         },
     }
 
     sweep_id = wandb.sweep(sweep=sweep_configuration, project='my-test-project')
-    wandb.agent(sweep_id, function=wand_b_iteration, count=10)
+    wandb.agent(sweep_id, function=mmlu_iteration,  count=10)
 
 import itertools
 def my_sweep():
 
-    large_models = ['unsloth/Llama-3.3-70B-Instruct', 'Qwen/Qwen2.5-32B-Instruct']
-    medium_models = None
-    small_models_1 = ['unsloth/Llama-3.2-3B-Instruct', ]
-    small_models_2 = None
 
-    logs = []
     param_grid = {
         'model': ['unsloth/Llama-3.2-3B-Instruct'],
         'scoper_type': ['linear_probe_scoper'],
-        'domains': ['stem'],
+        'domains': ["astronomy", "prehistory"],
         'dataset': ['mmlu'],
-        'training_examples': [100],
-        'test_examples': [10],
+        'training_examples': [1000],
+        'test_examples': [100],
         'batch_size': [10]
     }
 
@@ -223,7 +227,6 @@ if __name__ == '__main__':
     torch.cuda.empty_cache()
     load_dotenv()
 
-    my_sweep()
     wand_b_sweep()
 
 

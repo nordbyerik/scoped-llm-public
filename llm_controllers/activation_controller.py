@@ -18,6 +18,7 @@ class ActivationController(LLMController):
         super().__init__(model, use_ddp)
 
         self.save_folder_path = save_folder_path
+        self.overwrite = True
 
         model = self.get_model()
         layers = self.get_model().model.layers
@@ -113,7 +114,7 @@ class ActivationController(LLMController):
         aggregated_cpu_numpy = aggregated_gpu.detach().cpu().numpy()
         return aggregated_cpu_numpy
 
-    def extract_activations(self, texts, batch_size=1, aggregation_calc="last", activation_name='neutral'):
+    def extract_activations(self, texts, batch_size=10, aggregation_calc="last", activation_name='neutral'):
         # ---> Create DistributedSampler if DDP is active <---
         sampler = DistributedSampler(texts, shuffle=False) if self.is_ddp else None # 
         dataloader = DataLoader(texts, batch_size=batch_size, sampler=sampler)
@@ -127,7 +128,7 @@ class ActivationController(LLMController):
                 continue
 
             path = os.path.join(self.save_folder_path, f"layer_{layer_number}_{activation_name}.pt")
-            if os.path.exists(path):
+            if os.path.exists(path) and not self.overwrite:
                 all_activations[layer_number] = torch.load(path)
             else:
                 layers_to_calculate.append(layer_number)
@@ -198,7 +199,7 @@ class ActivationController(LLMController):
         
         for layer_name in all_activations_gathered:
             if layer_name in layers_to_calculate:
-                all_activations_gathered[layer_name] = torch.stack(all_activations_gathered[layer_name])
+                all_activations_gathered[layer_name] = torch.vstack(all_activations_gathered[layer_name])
 
             if activation_name is None:
                 continue

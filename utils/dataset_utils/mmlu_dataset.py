@@ -2,7 +2,8 @@ import os
 import numpy as np
 import pickle
 from datasets import load_dataset
-
+from torch.utils.data import Dataset, Subset
+from typing import List
 
 mmlu_subjects = {
             'stem': [
@@ -19,7 +20,7 @@ mmlu_subjects = {
                 'high_school_geography', 'high_school_government_and_politics',
                 'high_school_macroeconomics', 'high_school_microeconomics',
                 'high_school_psychology', 'high_school_us_history', 'high_school_world_history',
-                'human_aging', 'human_sexuality', 'international_law', 'jurisprudence',
+                'human_aging', 'human_sexuality', 'jurisprudence',
                 'logical_fallacies', 'management', 'marketing', 'medical_genetics',
                 'miscellaneous', 'moral_disputes', 'moral_scenarios', 'nutrition',
                 'philosophy', 'prehistory', 'professional_accounting', 'professional_law',
@@ -29,7 +30,7 @@ mmlu_subjects = {
             ]
     }
 
-class MMLUDataset:
+class MMLUDataset(Dataset):
     def __init__(self, sample_size=1000, split='validation', domains='stem', in_domain=True):
         # Grab stem
 
@@ -46,24 +47,41 @@ class MMLUDataset:
                     if subject not in domains:
                         out_domains.append(subject)
             domains = out_domains
+        self.domains = domains
         
-        domains = [domains[0]] # TODO: Remove this - just for testing
-        self.data, self.answers = self.get_data(sample_size, split, domains)
+        self.data, self.answers = self.get_data(sample_size, split)
+        self.in_domain = [int(in_domain) for _ in range(len(self.data))]
     
     def __len__(self):
         return len(self.data)
     
-    def __getitem__(self, index):
-        return self.data[index], self.answers[index]
+    def __getitem__(self, idx):
 
-    @classmethod
-    def get_data(cls, sample_size=1000, split='validation', domains=['astronomy']):
+        if isinstance(idx, (list, np.ndarray)):
+            # Return a new dataset with the specified indices
+            subset_data = [self.data[i] for i in idx]
+            subset_answers = [self.answers[i] for i in idx]
+            subset_in_domain = [self.in_domain[i] for i in idx]
+            
+            new_dataset = MMLUDataset.__new__(MMLUDataset)  # Create new instance without calling __init__
+            new_dataset.data = subset_data
+            new_dataset.answers = subset_answers
+            new_dataset.in_domain = subset_in_domain
+            return new_dataset
+        else:
+            return {
+                "question": self.data[idx],
+                "answer": self.answers[idx],
+                "in_domain": self.in_domain[idx]
+            }
+
+    def get_data(self, sample_size=1000, split='validation'):
 
         
         data = []
         for category, subjects in mmlu_subjects.items():
             for subject in subjects:
-                if subject not in domains:
+                if subject not in self.domains:
                     continue
 
                 path = os.path.join('mmlu_dataset', f"mmlu_dataset_{subject}_{split}_{sample_size}.pkl")
@@ -74,7 +92,7 @@ class MMLUDataset:
                     pickle.dump(dataset, open(path, 'wb'))
 
 
-                max_examples = min(len(dataset), sample_size // len(domains))
+                max_examples = min(len(dataset), sample_size // len(self.domains))
                 indices = np.random.choice(len(dataset), size=max_examples, replace=False)
 
                 for i in indices:
@@ -84,6 +102,7 @@ class MMLUDataset:
                         'choices': [example['choices'][i] for i in range(4)],
                         'answer': example['answer']
                     })
+                del dataset
 
         # Format MMLU examples for evaluation
         prompt_template = "Question: {question}\nA. {A}\nB. {B}\nC. {C}\nD. {D}\nAnswer:"

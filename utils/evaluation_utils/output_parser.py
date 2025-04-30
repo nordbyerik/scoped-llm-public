@@ -87,6 +87,6 @@ class MultipleChoiceLogitParser(MultipleChoiceParser):
 
 
         # Return the option with highest probability
-        return option_chars[np.argmax(option_probs)]
+        return np.argmax(option_probs)
 
 

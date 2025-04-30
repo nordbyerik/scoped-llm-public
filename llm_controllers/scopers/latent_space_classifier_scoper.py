@@ -11,6 +11,14 @@ import torch
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import classification_report
 
+
+import torch
+import gc
+import inspect
+import sys
+
+
+
 class ScopeClassifier(ActivationController):
     def __init__(self, model, selected_layers='all', save_folder_path='scoping_vectors'):
         super().__init__(model, selected_layers=selected_layers, save_folder_path=save_folder_path)
@@ -39,7 +47,9 @@ class ScopeClassifier(ActivationController):
             print("Positive Examples Lne", len(positive_examples))
             print("Negative Examples Lne", len(negative_examples))
 
-            labels = [1] * len(positive_examples) + [0] * len(positive_examples)
+            len_positive = len(positive_examples)
+            len_negative = len(negative_examples)
+            labels = [1] * len(positive_examples) + [0] * len(negative_examples)
 
             all_activations = list(positive_examples) + list(negative_examples)
             all_activations = np.array(all_activations).squeeze()
@@ -62,6 +72,8 @@ class ScopeClassifier(ActivationController):
                 best_accuracy = report['accuracy']
                 best_layer = layer_name
                 best_model = classifier
+            
+            del all_activations
 
 
         # Visualize results
@@ -85,15 +97,30 @@ class ScopeClassifier(ActivationController):
         return best_layer, best_model
 
     def train(self, in_domain, out_of_domain, batch_size=10):
-        self.best_layer, self.classifier = self.train_linear_probe(in_domain, out_of_domain)
+        self.best_layer, self.classifier = self.train_linear_probe(in_domain.data, out_of_domain.data)
 
     def generate(self, prompts):
+        if isinstance(prompts, str):
+            prompts = [prompts]
         activations = self.extract_activations(prompts, batch_size=1, aggregation_calc="last", activation_name=None)
-        classification = self.best_model.predict(activations[self.best_layer].cpu().squeeze())
-        inputs = self.tokenizer(prompts, return_tensors="pt", padding=True, truncation=True).to(self.model.device)
-        response = self.model(**inputs)
+        classification = self.best_model.predict(activations[self.best_layer].cpu())
 
-        return response
+        del activations
+        torch.cuda.empty_cache()
+
+        inputs = self.tokenizer(prompts, return_tensors="pt", padding=True, truncation=True).to(self.model.device)
+        responses = self.model(**inputs)
+
+        
+        original_type = type(responses.logits)
+        device = responses.logits.device
+        logits_array = np.array(responses.logits.detach().cpu())
+        for i, c in enumerate(classification):
+            if c != 1:
+                logits_array[i] = torch.Tensor([-1])
+        responses.logits = original_type(torch.Tensor(logits_array).to(device))
+        
+        return responses
 
 import copy
 from torch.utils.data import TensorDataset, DataLoader
