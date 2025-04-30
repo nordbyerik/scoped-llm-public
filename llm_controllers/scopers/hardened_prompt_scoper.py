@@ -6,8 +6,10 @@ from llm_controllers.llm_controller import LLMController
 from utils.evaluation_utils.output_parser import MultipleChoiceLogitParser
 
 class HardenedPromptScoper(LLMController):
-    def __init__(self, model, hardened_prompt_template, use_ddp):
+    def __init__(self, model, hardened_prompt_template=None, domains=['stem'], use_ddp=False):
         super().__init__(model, use_ddp)
+        if prompt_classifier_template is None:
+            prompt_classifier_template = f"You should only answer questions related to {domains}. Otherwise just answer 'E'.\n\n{'{prompt}'}\n\nAnswer: "
         self.hardened_prompt_template = hardened_prompt_template
 
     def generate(self, prompts, max_length=100):
@@ -18,8 +20,10 @@ class HardenedPromptScoper(LLMController):
 
 
 class PromptClassificationScoper(LLMController):
-    def __init__(self, model, prompt_classifier_template, use_ddp):
+    def __init__(self, model, prompt_classifier_template=None, domains=['stem'], use_ddp=False):
         super().__init__(model, use_ddp)
+        if prompt_classifier_template is None:
+            prompt_classifier_template = f"Is the following prompt related to {domains}?\n\n{'{prompt}'}\n\nAnswer: "
         self.prompt_classifier_template = prompt_classifier_template
 
     def check_domain(self, prompts):

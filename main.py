@@ -22,6 +22,8 @@ from llm_controllers.steerers.pca_steerer import PCASteerer
 from llm_controllers.steerers.probe_activation_steerer import LinearProbeSteerer, TorchModelSteerer
 
 from llm_controllers.scopers.latent_space_classifier_scoper  import ScopeClassifier
+from llm_controllers.scopers.hardened_prompt_scoper import HardenedPromptScoper, PromptClassificationScoper
+from llm_controllers.scopers.circuit_breaker_scoper import CircuitBreakerScoper
 
 from utils.dataset_utils.persuade_dataset import PersuadeDataset
 from utils.dataset_utils.mmlu_dataset import MMLUDataset
@@ -142,9 +144,13 @@ def mmlu_iteration(config=None):
 
         if config['scoper_type'] == 'linear_probe_scoper':
             scoper = ScopeClassifier(config['model'], save_folder_path=path)
+        elif config['scoper_type'] == 'hardened_prompt_scoper':
+            scoper = HardenedPromptScoper(config['model'], domains=config['domains'])
+        elif config['scoper_type'] == 'prompt_classification_scoper':
+           scoper = PromptClassificationScoper(config['model'], domains=config['domains'])
         elif config['scoper_type'] == 'circuit_breaker_scoper':
-            pass
-
+            scoper = CircuitBreakerScoper(config['model'], save_folder_path=path)
+    
         scoper.train(in_domain, out_of_domain, batch_size=10)
         if not os.path.exists(folder):
             os.makedirs(folder)
@@ -187,40 +193,17 @@ def wand_b_sweep():
         'metric': {'goal': 'maximize', 'name': 'percent_win'},
         'parameters': {
             'model': {'values': ['unsloth/Llama-3.2-3B-Instruct']},
-            'scoper_type':{'values': ['linear_probe_scoper']}, # 'torch', 'linear_probe', 
-            'domains': {'values': [["astronomy", "prehistory"]]},
+            'scoper_type':{'values': ['circuit_breaker_scoper']}, # 'torch', 'linear_probe', 
+            'domains': {'values': [["astronomy"]]},
             'dataset': {'value': 'mmlu'},
             'training_examples': {'value': 1000},
             'test_examples': {'value': 100},
-            'batch_size': {'value': 10}
+            'batch_size': {'value': 2}
         },
     }
 
     sweep_id = wandb.sweep(sweep=sweep_configuration, project='my-test-project')
     wandb.agent(sweep_id, function=mmlu_iteration,  count=10)
-
-import itertools
-def my_sweep():
-
-
-    param_grid = {
-        'model': ['unsloth/Llama-3.2-3B-Instruct'],
-        'scoper_type': ['linear_probe_scoper'],
-        'domains': ["astronomy", "prehistory"],
-        'dataset': ['mmlu'],
-        'training_examples': [1000],
-        'test_examples': [100],
-        'batch_size': [10]
-    }
-
-    # --- Generate Combinations ---
-    keys, values = zip(*param_grid.items())
-    config_combinations = [dict(zip(keys, v)) for v in itertools.product(*values)]
-
-    for i, config in enumerate(config_combinations):
-        results = mmlu_iteration(config)
-        with open("logs.txt", "a") as f:
-            f.write(str(results) + "\n")
 
 
 if __name__ == '__main__':

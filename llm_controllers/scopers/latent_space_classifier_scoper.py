@@ -1,6 +1,9 @@
 import torch
+from torch.utils.data import DataLoader, Dataset
 import numpy as np
 import matplotlib.pyplot as plt
+
+from typing import List, Union
 
 from llm_controllers.activation_controller import ActivationController # TODO: Move Activation Steering out of steerers
 
@@ -30,7 +33,7 @@ class ScopeClassifier(ActivationController):
     def __call__(self, prompts):
         return self.generate(prompts)
 
-    def train_linear_probe(self, positive_texts, negative_texts):
+    def train_linear_probe(self, positive_texts: List[str], negative_texts: list[str]):
         positive_activations = self.extract_activations(positive_texts)
         negative_activations = self.extract_activations(negative_texts)
 
@@ -96,10 +99,10 @@ class ScopeClassifier(ActivationController):
         self.classifier = best_model
         return best_layer, best_model
 
-    def train(self, in_domain, out_of_domain, batch_size=10):
+    def train(self, in_domain: Dataset, out_of_domain: Dataset, batch_size=10):
         self.best_layer, self.classifier = self.train_linear_probe(in_domain.data, out_of_domain.data)
 
-    def generate(self, prompts):
+    def generate(self, prompts: Union[str, List[str]]):
         if isinstance(prompts, str):
             prompts = [prompts]
         activations = self.extract_activations(prompts, batch_size=1, aggregation_calc="last", activation_name=None)
