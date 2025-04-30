@@ -14,7 +14,7 @@ from sklearn.manifold import TSNE
 from utils.activation_utils.steering_layer import SteeringLayer
 
 class ActivationController(LLMController):
-    def __init__(self, model, selected_layers=None, use_ddp=True, save_folder_path="."):
+    def __init__(self, model, selected_layers='all', use_ddp=True, save_folder_path="."):
         super().__init__(model, use_ddp)
 
         self.save_folder_path = save_folder_path

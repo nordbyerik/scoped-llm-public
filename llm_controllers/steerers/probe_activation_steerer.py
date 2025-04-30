@@ -16,14 +16,14 @@ from tqdm import tqdm
 
 
 class LinearProbeSteerer(ActivationController):
-    def __init__(self, model, selected_layers=None):
+    def __init__(self, model, selected_layers='all'):
         super().__init__(model, selected_layers=selected_layers)
 
         self.best_layer = None
         self.best_model = None
         self.classifier = None
 
-    def train_classifier(self, positive_texts, negative_texts):
+    def train_linear_probe(self, positive_texts, negative_texts):
         positive_activations = self.extract_activations(positive_texts)
         negative_activations = self.extract_activations(negative_texts)
 
@@ -35,8 +35,8 @@ class LinearProbeSteerer(ActivationController):
         layer_coeffs = {}
 
         for layer_name in positive_activations:
-            positive_examples = np.array(positive_activations[layer_name])
-            negative_examples = np.array(negative_activations[layer_name])
+            positive_examples = np.array(positive_activations[layer_name].cpu())
+            negative_examples = np.array(negative_activations[layer_name].cpu())
             print("Positive Examples Lne", len(positive_examples))
             print("Negative Examples Lne", len(negative_examples))
 
@@ -84,6 +84,9 @@ class LinearProbeSteerer(ActivationController):
         self.best_layer = best_layer
         self.classifier = best_model
         return best_layer, best_model
+
+    def train(self, in_domain, out_of_domain, batch_size=10):
+        self.best_layer, self.classifier = self.train_linear_probe(in_domain, out_of_domain)
 
     def set_transformation_function(self, c=1, func_type='multiply', layers="all"):
         if layers == "best":

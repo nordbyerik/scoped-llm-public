@@ -1,5 +1,8 @@
+import os
 import numpy as np
+import pickle
 from datasets import load_dataset
+
 
 mmlu_subjects = {
             'stem': [
@@ -8,7 +11,7 @@ mmlu_subjects = {
                 'computer_security', 'conceptual_physics', 'electrical_engineering',
                 'elementary_mathematics', 'high_school_biology', 'high_school_chemistry',
                 'high_school_computer_science', 'high_school_mathematics', 'high_school_physics',
-                'high_school_statistics', 'machine_learning', 'physics'
+                'high_school_statistics', 'machine_learning'
             ],
             'non_stem': [
                 'anatomy', 'business_ethics', 'clinical_knowledge', 'college_medicine',
@@ -29,6 +32,7 @@ mmlu_subjects = {
 class MMLUDataset:
     def __init__(self, sample_size=1000, split='validation', domains='stem', in_domain=True):
         # Grab stem
+
         if (domains == 'stem' and in_domain) or (domains == 'non_stem' and not in_domain):
             domains = mmlu_subjects['stem']
         # Grab non-stem
@@ -43,31 +47,38 @@ class MMLUDataset:
                         out_domains.append(subject)
             domains = out_domains
         
-
-        self.data = self.get_data(sample_size, split, domains)
+        domains = [domains[0]] # TODO: Remove this - just for testing
+        self.data, self.answers = self.get_data(sample_size, split, domains)
     
     def __len__(self):
         return len(self.data)
     
     def __getitem__(self, index):
-        return self.data[index]
+        return self.data[index], self.answers[index]
 
     @classmethod
     def get_data(cls, sample_size=1000, split='validation', domains=['astronomy']):
+
         
         data = []
-        for category, subjects in cls.mmlu_subjects.items():
+        for category, subjects in mmlu_subjects.items():
             for subject in subjects:
                 if subject not in domains:
                     continue
 
-                dataset = load_dataset("cais/mmlu", subject, split=split)
+                path = os.path.join('mmlu_dataset', f"mmlu_dataset_{subject}_{split}_{sample_size}.pkl")
+                if os.path.exists(path):
+                    dataset = pickle.load(open(path, 'rb'))
+                else:
+                    dataset = load_dataset("cais/mmlu", subject, split=split)
+                    pickle.dump(dataset, open(path, 'wb'))
 
-                max_examples = min(len(dataset), sample_size // len(subjects))
+
+                max_examples = min(len(dataset), sample_size // len(domains))
                 indices = np.random.choice(len(dataset), size=max_examples, replace=False)
 
                 for i in indices:
-                    example = dataset[i]
+                    example = dataset[int(i)]
                     data.append({
                         'question': example['question'],
                         'choices': [example['choices'][i] for i in range(4)],
@@ -88,7 +99,10 @@ class MMLUDataset:
             return formatted
 
         formatted_data = []
-        for example in data.items():
+        answers = [example['answer'] for example in data]
+        for example in data:
             formatted_example = format_mmlu_example(example, prompt_template)
             formatted_data.append(formatted_example)
-        return formatted_data
+        
+
+        return formatted_data, answers

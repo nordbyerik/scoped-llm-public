@@ -1,5 +1,6 @@
 import torch
 import numpy as np
+import matplotlib.pyplot as plt
 
 from llm_controllers.activation_controller import ActivationController # TODO: Move Activation Steering out of steerers
 
@@ -11,68 +12,90 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import classification_report
 
 class ScopeClassifier(ActivationController):
-    def __init__(self, model, selected_layers=None, use_ddp=True):
-        super().__init__(model, selected_layers, use_ddp)
-        self.classifier = None
+    def __init__(self, model, selected_layers='all', save_folder_path='scoping_vectors'):
+        super().__init__(model, selected_layers=selected_layers, save_folder_path=save_folder_path)
+
         self.best_layer = None
+        self.best_model = None
+        self.classifier = None
+    
+    def __call__(self, prompts):
+        return self.generate(prompts)
 
-    def train_classifier(self, positive_prompts, negative_prompts, batch_size=8, aggregation_calc="last", vector_type="all"):
-        
-        positive_activations = self.extract_activations(positive_prompts, batch_size=batch_size, aggregation_calc=aggregation_calc, activation_name='positive')
-        negative_activations = self.extract_activations(negative_prompts, batch_size=batch_size, aggregation_calc=aggregation_calc, activation_name='negative')
+    def train_linear_probe(self, positive_texts, negative_texts):
+        positive_activations = self.extract_activations(positive_texts)
+        negative_activations = self.extract_activations(negative_texts)
 
-        texts = positive_activations + negative_activations
-        labels = [1] * len(positive_activations) + [0] * len(negative_activations)
-
-        all_activations = self.extract_activations(texts)
-
-        # Train and evaluate classifiers for each layer
         results = {}
         best_accuracy = 0
         best_layer = ""
         best_model = None
-        for layer_name, activations in all_activations.items():
-            activations_array = np.array(activations)
 
-            # Split data
+        layer_coeffs = {}
+
+        for layer_name in positive_activations:
+            positive_examples = np.array(positive_activations[layer_name].cpu())
+            negative_examples = np.array(negative_activations[layer_name].cpu())
+            print("Positive Examples Lne", len(positive_examples))
+            print("Negative Examples Lne", len(negative_examples))
+
+            labels = [1] * len(positive_examples) + [0] * len(positive_examples)
+
+            all_activations = list(positive_examples) + list(negative_examples)
+            all_activations = np.array(all_activations).squeeze()
+
             X_train, X_test, y_train, y_test = train_test_split(
-                activations_array, labels, test_size=0.3, random_state=42
+                all_activations, labels, test_size=0.3, random_state=42
             )
 
             # Train classifier
             classifier = LogisticRegression(max_iter=1000)
             classifier.fit(X_train, y_train)
 
-            # Evaluate
             y_pred = classifier.predict(X_test)
             report = classification_report(y_test, y_pred, output_dict=True)
             results[layer_name] = report['accuracy']
+
+            layer_coeffs[layer_name] = classifier.coef_[0]
 
             if report['accuracy'] > best_accuracy:
                 best_accuracy = report['accuracy']
                 best_layer = layer_name
                 best_model = classifier
 
+
+        # Visualize results
+        plt.figure(figsize=(10, 6))
+        layers = list(results.keys())
+        accuracies = [results[layer] for layer in layers]
+
+        plt.bar(range(len(results)), accuracies)
+        plt.xlabel('Layer')
+        plt.ylabel('Accuracy')
+        plt.title('Classification Accuracy by Layer')
+        plt.xticks(range(len(results)), [f"Layer {layer} {layer}" for layer in layers])
+        plt.tight_layout()
+        plt.savefig('steering_output/layer_accuracies.png')
+        print("Results visualization saved to 'steering_output/layer_accuracies.png'")
+
+        print("Best model", best_model.coef_)
+        self.best_model = best_model
+        self.best_layer = best_layer
+        self.classifier = best_model
         return best_layer, best_model
 
-    # TODO: Allow this to store different steering vectors and combine them
-    def train(self, positive_prompts, negative_prompts, batch_size=8, aggregation_calc="last"):
-        self.selected_layers, self.best_model = self.train_classifier(positive_prompts, negative_prompts, batch_size, aggregation_calc)
-        return (self.best_layer, self.best_model)
-    
-    def load(self, filepath):
-        best_stuff = torch.load(filepath, weights_only=False)
-        self.selected_layers, self.best_model = best_stuff
+    def train(self, in_domain, out_of_domain, batch_size=10):
+        self.best_layer, self.classifier = self.train_linear_probe(in_domain, out_of_domain)
 
-    def save(self, path_string):
-        torch.save((self.best_layer, self.best_model), path_string)
+    def generate(self, prompts):
+        activations = self.extract_activations(prompts, batch_size=1, aggregation_calc="last", activation_name=None)
+        classification = self.best_model.predict(activations[self.best_layer].cpu().squeeze())
+        inputs = self.tokenizer(prompts, return_tensors="pt", padding=True, truncation=True).to(self.model.device)
+        response = self.model(**inputs)
 
-    def generate(self, prompt, max_length=100):
-        # Clear to ensure not prior transformation functions
-        self.clear_transformation_functions()
+        return response
 
-        activations = self.extract_activations(prompt, batch_size=1, aggregation_calc="last", activation_name=None)
-        classification = self.best_model.predict(activations)
-
-        return super().generate(prompt, max_length=max_length)
+import copy
+from torch.utils.data import TensorDataset, DataLoader
+from sklearn.metrics import classification_report, accuracy_score
 
