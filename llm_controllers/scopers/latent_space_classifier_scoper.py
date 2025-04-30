@@ -50,8 +50,6 @@ class ScopeClassifier(ActivationController):
             print("Positive Examples Lne", len(positive_examples))
             print("Negative Examples Lne", len(negative_examples))
 
-            len_positive = len(positive_examples)
-            len_negative = len(negative_examples)
             labels = [1] * len(positive_examples) + [0] * len(negative_examples)
 
             all_activations = list(positive_examples) + list(negative_examples)
@@ -125,7 +123,4 @@ class ScopeClassifier(ActivationController):
         
         return responses
 
-import copy
-from torch.utils.data import TensorDataset, DataLoader
-from sklearn.metrics import classification_report, accuracy_score
 

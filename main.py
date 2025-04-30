@@ -158,7 +158,7 @@ def mmlu_iteration(config=None):
         mmlu_evaluator = MMLUEvaluator(scoper.tokenizer, 'logits') # Provider might need API keys etc.
 
         questions = test_dataset.data
-        batch_size = 5
+        batch_size = 2
 
         steered_output = None
         for i in range(0, len(questions), batch_size):
@@ -193,7 +193,7 @@ def wand_b_sweep():
         'metric': {'goal': 'maximize', 'name': 'percent_win'},
         'parameters': {
             'model': {'values': ['unsloth/Llama-3.2-3B-Instruct']},
-            'scoper_type':{'values': ['circuit_breaker_scoper']}, # 'torch', 'linear_probe', 
+            'scoper_type':{'values': ['hardened_prompt_scoper']},#, 'linear_probe_scoper' ]}, # 'torch', 'linear_probe', 
             'domains': {'values': [["astronomy"]]},
             'dataset': {'value': 'mmlu'},
             'training_examples': {'value': 1000},
