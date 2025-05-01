@@ -159,7 +159,7 @@ def mmlu_iteration(config=None):
 
         plain_model = LLMController(model=config['model'], use_ddp=False)
 
-        mmlu_evaluator = MultipleChoiceEvaluator(scoper.tokenizer, 'logits') # Provider might need API keys etc.
+        mcq_evaluator = MultipleChoiceEvaluator(scoper.tokenizer, 'logits') # Provider might need API keys etc.
 
         questions = test_dataset.data
         batch_size = 2
@@ -181,7 +181,7 @@ def mmlu_iteration(config=None):
                 steered_output = torch.zeros((len(questions), batch_steered_output.shape[-1]))
             steered_output[i:i + batch_size] = batch_steered_output
 
-        metrics = mmlu_evaluator(steered_output, plain_output, test_dataset)
+        metrics = mcq_evaluator(steered_output, plain_output, test_dataset)
 
         wandb.log({"metrics":metrics, "result": "success"})
     except Exception as e:
