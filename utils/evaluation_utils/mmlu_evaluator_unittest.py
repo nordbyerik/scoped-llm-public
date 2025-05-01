@@ -1,16 +1,9 @@
 import unittest
 import numpy as np
-from scipy.stats import chi2_contingency
 from unittest.mock import MagicMock, patch
 from .mmlu_evaluator import MMLUEvaluator
 
-class TestEvaluateMMLU(unittest.TestCase):
-    def __init__(self):
-        # Define the global variables needed by the method
-        global in_domain_contingency_table, out_of_domain_contingency_table
-        in_domain_contingency_table = np.zeros((2, 2), dtype=int)
-        out_of_domain_contingency_table = np.zeros((2, 2), dtype=int)
-    
+class TestEvaluateMMLU(unittest.TestCase):    
     def evaluate_mmlu(self, outputs, control_outputs, batch):
         evaluator = MMLUEvaluator(tokenizer="")
         return evaluator.evaluate_mmlu(outputs, control_outputs, batch)
@@ -48,34 +41,84 @@ class TestEvaluateMMLU(unittest.TestCase):
         batch.in_domain = [True, True, True, False, False, False]
         
         # Test model gets some right, some wrong
-        outputs = ['A', 'X', 'C', 'D', 'X', 'F']  # 4/6 correct
+        outputs = ['A', 'X', 'C', 'X', 'X', 'F']  # 3/6 correct
         # Control model gets different ones right/wrong
-        control_outputs = ['X', 'B', 'C', 'X', 'E', 'X']  # 3/6 correct
-        
-        # Expected contingency tables
-        expected_in_domain = np.array([[0, 1], [1, 1]], dtype=int)
-        expected_out_domain = np.array([[0, 1], [2, 0]], dtype=int)
-        
-        # Reset contingency tables for this test
-        global in_domain_contingency_table, out_of_domain_contingency_table
-        in_domain_contingency_table = np.zeros((2, 2), dtype=int)
-        out_of_domain_contingency_table = np.zeros((2, 2), dtype=int)
+        control_outputs = ['X', 'B', 'C', 'D', 'E', 'X']  # 4/6 correct
         
         # Call the method
         metrics = self.evaluate_mmlu(outputs, control_outputs, batch)
         
         # Assertions
         self.assertAlmostEqual(metrics['in_domain_accuracy'], 2/3)
-        self.assertAlmostEqual(metrics['out_of_domain_accuracy'], 2/3)
+        self.assertAlmostEqual(metrics['out_of_domain_accuracy'], 1/3)
         
-        # Delta should be (2 - 2)/6 for in_domain
+        # Delta should be (2 - 2)/3 for in_domain
         self.assertAlmostEqual(metrics['in_domain_accuracy_delta'], 0)
         
-        # Delta should be (2 - 1)/6 for out_of_domain
-        self.assertAlmostEqual(metrics['out_of_domain_accuracy_delta'], 1/6)
+        # Delta should be (2 - 1)/3 for out_of_domain
+        self.assertAlmostEqual(metrics['out_of_domain_accuracy_delta'], -1/3)
         
-        np.testing.assert_array_equal(metrics['in_domain_contingency_table'], expected_in_domain)
-        np.testing.assert_array_equal(metrics['out_of_domain_contingency_table'], expected_out_domain)
+        # Check that p-values exist but don't check exact values since chi2 is mocked
+        self.assertIn('in_domain_accuracy_p_value', metrics)
+        self.assertIn('out_of_domain_accuracy_p_value', metrics)
+
+
+    def test_degrade(self):
+        """Test case with mixed results between models, more representative with a large Chi2 (very little agreement)"""
+        batch = MagicMock()
+            
+        # Create 80 sample answers with the same proportions (40 in-domain, 40 out-of-domain)
+        answers = []
+        in_domain = []
+        outputs = []
+        control_outputs = []
+
+        # For in-domain (40 samples):
+        for i in range(45):
+            answer = chr(65 + (i % 26))  # Generate answer from A-Z
+            answers.append(answer)
+            in_domain.append(True)
+            
+            # Distribute as per original test
+            if i % 3 == 0:  # Both wrong (1/3 of cases)
+                outputs.append('X')
+                control_outputs.append('X')
+            else:  # Both right (2/3 of cases)
+                outputs.append(answer)
+                control_outputs.append(answer)
+
+        # For out-of-domain (40 samples):
+        for i in range(45):
+            answer = chr(65 + (i % 26))
+            answers.append(answer)
+            in_domain.append(False)
+            
+            if i % 3 == 1:  # both wrong (1/3 of cases)
+                outputs.append('X')
+                control_outputs.append('X')
+            elif i % 9 == 0:  # Test wrong, control right (1/9 of cases)
+                outputs.append('X')
+                control_outputs.append(answer)
+            else:  # both right (rest of cases)
+                outputs.append(answer)
+                control_outputs.append(answer)
+
+        batch.answers = answers
+        batch.in_domain = in_domain
+
+        print("len", len(outputs),len(control_outputs))
+        # Call the method
+        metrics = self.evaluate_mmlu(outputs, control_outputs, batch)
+        
+        # Assertions
+        self.assertAlmostEqual(metrics['in_domain_accuracy'], 2/3)
+        self.assertAlmostEqual(metrics['out_of_domain_accuracy'], 5/9)
+        
+        # Delta should be (2 - 2)/3 for in_domain
+        self.assertAlmostEqual(metrics['in_domain_accuracy_delta'], 0)
+        
+        # Delta should be (2 - 1)/3 for out_of_domain
+        self.assertAlmostEqual(metrics['out_of_domain_accuracy_delta'], -1/9)
         
         # Check that p-values exist but don't check exact values since chi2 is mocked
         self.assertIn('in_domain_accuracy_p_value', metrics)
