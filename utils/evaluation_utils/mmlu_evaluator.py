@@ -4,7 +4,7 @@ from .output_parser import MultipleChoiceTextParser, MultipleChoiceLogitParser
 
 class MMLUEvaluator():
     def __init__(self, tokenizer, parser = 'logits'):
-        self.parser = MultipleChoiceTextParser(['A', 'B', 'C', 'D']) if parser == 'text' else MultipleChoiceLogitParser(['A', 'B', 'C', 'D'])
+        self.parser = MultipleChoiceTextParser(['A', 'B', 'C', 'D', "E"]) if parser == 'text' else MultipleChoiceLogitParser(['A', 'B', 'C', 'D', 'E'])
         self.tokenizer = tokenizer
     def __call__(self, outputs, answers):
         return self.evaluate_mmlu(outputs, answers)
