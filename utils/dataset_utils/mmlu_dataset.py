@@ -12,20 +12,20 @@ mmlu_subjects = {
                 'computer_security', 'conceptual_physics', 'electrical_engineering',
                 'elementary_mathematics', 'high_school_biology', 'high_school_chemistry',
                 'high_school_computer_science', 'high_school_mathematics', 'high_school_physics',
-                'high_school_statistics', 'machine_learning'
+                'high_school_statistics', 'machine_learning', 'medical_genetics', 'virology', 'college_medicine', 
+                'anatomy', 'professional_medicine', 'clinical_knowledge'
             ],
             'non_stem': [
-                'anatomy', 'business_ethics', 'clinical_knowledge', 'college_medicine',
-                'econometrics', 'global_facts', 'high_school_european_history',
+                'business_ethics', 'econometrics', 'global_facts', 'high_school_european_history',
                 'high_school_geography', 'high_school_government_and_politics',
                 'high_school_macroeconomics', 'high_school_microeconomics',
                 'high_school_psychology', 'high_school_us_history', 'high_school_world_history',
                 'human_aging', 'human_sexuality', 'jurisprudence',
-                'logical_fallacies', 'management', 'marketing', 'medical_genetics',
+                'logical_fallacies', 'management', 'marketing', 
                 'miscellaneous', 'moral_disputes', 'moral_scenarios', 'nutrition',
                 'philosophy', 'prehistory', 'professional_accounting', 'professional_law',
-                'professional_medicine', 'professional_psychology', 'public_relations',
-                'security_studies', 'sociology', 'us_foreign_policy', 'virology',
+                'professional_psychology', 'public_relations',
+                'security_studies', 'sociology', 'us_foreign_policy', 
                 'world_religions'
             ]
     }

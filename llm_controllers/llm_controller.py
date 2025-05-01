@@ -9,6 +9,32 @@ from abc import abstractmethod
 
 
 class LLMController:
+    def get_max_memory_mapping(self):
+        """
+        Creates a memory mapping dictionary for available GPUs to balance model loading.
+        
+        Returns:
+            Dict[str, str]: Dictionary mapping device IDs to maximum memory allocations.
+        """
+        import torch
+        
+        # Get number of GPUs
+        n_gpus = torch.cuda.device_count()
+        
+        # Create memory map
+        max_memory = {}
+        
+        # Assign memory for each GPU
+        for i in range(n_gpus):
+            # Get free memory (in bytes) and convert to GB with some buffer
+            free_in_gb = torch.cuda.get_device_properties(i).total_memory * 0.85 / (1024**3)
+            max_memory[f"gpu:{i}"] = f"{int(free_in_gb)}GiB"
+        
+        # Also specify CPU memory if needed
+        max_memory["cpu"] = "24GiB"  # Adjust based on your system
+        
+        return max_memory
+
     def __init__(self, model_name, use_ddp):
         self.is_ddp = torch.distributed.is_initialized() and torch.distributed.get_world_size() > 1 and use_ddp
         
@@ -33,11 +59,10 @@ class LLMController:
         self.model = AutoModelForCausalLM.from_pretrained(
             model_name,
             quantization_config=bnb_config,
-            attn_implementation="eager", # "eager"
+            attn_implementation="eager",
             low_cpu_mem_usage=True,
             trust_remote_code=True,
-            device_map="auto",
-            #max_memory=max_memory_mapping
+            device_map="balanced", # Change from "auto" to "balanced"
         )
         
         # Wrap with DDP if in distributed mode

@@ -2,6 +2,7 @@ from llm_controllers.llm_controller import LLMController
 import torch
 import numpy as np
 import os
+import gc
 
 from torch.utils.data import DataLoader, DistributedSampler
 import torch.distributed as dist
@@ -142,7 +143,7 @@ class ActivationController(LLMController):
 
             # Tokenize batch
             inputs = self.tokenizer(
-                batch_texts, return_tensors='pt', padding=True, truncation=True,
+                batch_texts['question'], return_tensors='pt', padding=True, truncation=True,
                 max_length=10000 # Adjust if needed
             ).to(self.model.device)
 
@@ -183,6 +184,8 @@ class ActivationController(LLMController):
                 if not os.path.exists(self.save_folder_path):
                     os.mkdir(self.save_folder_path)
 
+                gc.collect()
+                torch.cuda.empty_cache()
 
             del inputs, outputs # Free memory
             torch.cuda.empty_cache()

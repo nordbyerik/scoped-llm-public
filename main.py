@@ -152,7 +152,9 @@ def mmlu_iteration(config=None):
            scoper = PromptClassificationScoper(config['model'], domains=config['domains'])
         elif config['scoper_type'] == 'circuit_breaker_scoper':
             scoper = CircuitBreakerScoper(config['model'], save_folder_path=path)
-    
+        elif config['scoper_type'] == 'activation_steerer':
+            scoper = ActAddSteerer(config['model'], save_folder_path=path)
+
         scoper.train(in_domain, out_of_domain, batch_size=10)
         if not os.path.exists(folder):
             os.makedirs(folder)
@@ -195,19 +197,14 @@ def mmlu_iteration(config=None):
 
 def wand_b_sweep():
 
-    large_models = ['unsloth/Llama-3.3-70B-Instruct', 'Qwen/Qwen2.5-32B-Instruct']
-    small_models_1 = ['unsloth/Llama-3.2-3B-Instruct', 'unsloth/Llama-3.2-1B-Instruct', 'unsloth/Meta-Llama-3.1-8B']
-
-
     sweep_configuration = {
         'method': 'random',
         'name': 'sweep',
         'metric': {'goal': 'maximize', 'name': 'accuracy'},
         'parameters': {
-            'model': {'values': ['unsloth/Llama-3.2-3B-Instruct', 'unsloth/Llama-3.2-1B-Instruct', 'unsloth/Meta-Llama-3.1-8B', 'google/gemma-2-27b' ]},
-            'scoper_type':{'values': ['circuit_breaker_scoper', 'prompt_classification_scoper','hardened_prompt_scoper','linear_probe_scoper' ]}, # 'torch', 'linear_probe', 
+            'model': {'values': ['Qwen/Qwen2.5-32B-Instruct']}, #'unsloth/Llama-3.2-3B-Instruct', 'unsloth/Llama-3.2-1B-Instruct' ]}, # 'Qwen/Qwen2.5-32B-Instruct', , 'google/gemma-3-12b-it'
+            'scoper_type':{'values': ['activation_steerer' ]}, #'circuit_breaker_scoper', 'prompt_classification_scoper','hardened_prompt_scoper','linear_probe_scoper']}, # 'torch', 'linear_probe', 
             'domains': {'values': [
-                ["astronomy"], 
                 "stem", 
                 ['world_religions'],
                 ['virology'],
