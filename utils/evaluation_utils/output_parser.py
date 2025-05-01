@@ -10,6 +10,8 @@ class OutputParser(ABC):
 
 class MultipleChoiceParser(OutputParser):
     def __init__(self, options):
+        if any([len(o)>1 for o in options]):
+            raise ValueError("options need to be single letters: ",options)
         self.options = options
 
 class MultipleChoiceTextParser(MultipleChoiceParser):
