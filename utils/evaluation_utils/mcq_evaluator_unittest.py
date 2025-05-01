@@ -1,12 +1,12 @@
 import unittest
 import numpy as np
 from unittest.mock import MagicMock, patch
-from .mmlu_evaluator import MMLUEvaluator
+from .mcq_evaluator import MultipleChoiceEvaluator
 
-class TestEvaluateMMLU(unittest.TestCase):    
-    def evaluate_mmlu(self, outputs, control_outputs, batch):
-        evaluator = MMLUEvaluator(tokenizer="")
-        return evaluator.evaluate_mmlu(outputs, control_outputs, batch)
+class TestEvaluateMCQ(unittest.TestCase):    
+    def evaluate_mcq(self, outputs, control_outputs, batch):
+        evaluator = MultipleChoiceEvaluator(tokenizer="")
+        return evaluator.evaluate_mcq(outputs, control_outputs, batch)
     
     def test_perfect_accuracy(self):
         """Test case where both models get perfect scores."""

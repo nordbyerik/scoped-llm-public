@@ -32,7 +32,7 @@ from utils.dataset_utils.mmlu_dataset import MMLUDataset
 from utils.dataset_utils.sni_dataset import SNIDataset
 
 from utils.evaluation_utils.evaluator import FeedbackEvaluator
-from utils.evaluation_utils.mmlu_evaluator import MMLUEvaluator
+from utils.evaluation_utils.mcq_evaluator import MultipleChoiceEvaluator
 
 def load_persuade(training_examples, test_examples=5):
     essays = PersuadeDataset().get_data(training_examples)
@@ -159,7 +159,7 @@ def mmlu_iteration(config=None):
 
         plain_model = LLMController(model=config['model'], use_ddp=False)
 
-        mmlu_evaluator = MMLUEvaluator(scoper.tokenizer, 'logits') # Provider might need API keys etc.
+        mmlu_evaluator = MultipleChoiceEvaluator(scoper.tokenizer, 'logits') # Provider might need API keys etc.
 
         questions = test_dataset.data
         batch_size = 2
