@@ -1,4 +1,5 @@
 import numpy as np
+from scipy.stats import chi2_contingency
 from .output_parser import MultipleChoiceTextParser, MultipleChoiceLogitParser
 
 class MMLUEvaluator():
@@ -10,12 +11,12 @@ class MMLUEvaluator():
     def get_answer(self, outputs): 
         return self.parser(outputs)
     
-    def evaluate_mmlu(self, outputs, control_outputs, batch):    
+    def evaluate_mmlu(self, outputs, control_outputs, batch):   
         answers = batch.answers
         in_domain = batch.in_domain
 
         # TODO: Include the in_vs_out_of_domain
-        outputs = [self.parser(output, self.tokenizer) if not (output == -1).all().item() else -1 for output in outputs]
+        outputs = [self.parser(output, self.tokenizer) if len([o for o in output if o == -1])<1 else -1 for output in outputs]
         
         # Calculate acceptance/rejection metrics
         rejected = [outputs[i] == -1 for i, answer in enumerate(answers)]
@@ -33,10 +34,10 @@ class MMLUEvaluator():
         recall = true_positives / (true_positives + false_negatives) if (true_positives + false_negatives) > 0 else 0
         f1_score = 2 * (precision * recall) / (precision + recall) if (precision + recall) > 0 else 0
         
-        contingency_table = np.zeros((2, 2), dtype=int)
         in_domain_accuracy = sum([outputs[i] == answers[i] for i in range(len(answers)) if in_domain[i]]) / sum(in_domain) if sum(in_domain) > 0 else 0
         out_of_domain_accuracy = sum([outputs[i] == answers[i] for i in range(len(answers)) if not in_domain[i]]) / sum([not x for x in in_domain]) if sum([not x for x in in_domain]) > 0 else 0
-
+        in_domain_contingency_table = np.zeros((2, 2), dtype=int)
+        out_of_domain_contingency_table = np.zeros((2, 2), dtype=int)
         # Fill the contingency table
         for i in range(len(answers)):
             if in_domain[i]:
@@ -70,7 +71,7 @@ class MMLUEvaluator():
         in_domain_delta = (sum(in_domain_contingency_table[1,:])-sum(in_domain_contingency_table[:,1]))/len(answers)
         out_of_domain_delta = (sum(out_of_domain_contingency_table[1,:])-sum(out_of_domain_contingency_table[:,1]))/len(answers)
         metrics.update({
-            "in_domain_contigency_table": in_domain_contingency_table,
+            "in_domain_contingency_table": in_domain_contingency_table,
             "out_of_domain_contingency_table": out_of_domain_contingency_table,
             "in_domain_accuracy_delta": in_domain_delta,
             "in_domain_accuracy_chi2": in_domain_chi2,
