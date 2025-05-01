@@ -17,42 +17,53 @@ class MultipleChoiceTextParser(MultipleChoiceParser):
     def __init__(self, options):
         self.options = options
 
-    # TODO: Right now this just handles A,B,C, or D
+    # TODO: Right now this just handles A,B,C, D or E
     def extract_answer_from_generated_text(generated_text):
-        """Extract the answer (A, B, C, or D) from generated text using various methods"""
+        """Extract the answer (A, B, C, D, or E) from generated text using various methods"""
         # Try different patterns to extract the answer
+        letters = "".join(self.options)
 
         # Method 1: Look for "The answer is X" pattern
-        match = re.search(r"[Tt]he answer is ([ABCD])", generated_text)
+        match = re.search(r"[Tt]he answer is (["+letters+"])", generated_text)
         if match:
             return match.group(1)
 
         # Method 2: Look for "Answer: X" pattern
-        match = re.search(r"Answer:\s*([ABCD])", generated_text)
+        match = re.search(r"Answer:\s*(["+letters+"])", generated_text)
         if match:
             return match.group(1)
 
         # Method 3: Direct matching of "A", "B", "C", or "D" at the beginning of the string
-        match = re.match(r"^\s*([ABCD])", generated_text.strip())
+        match = re.match(r"^\s*(["+letters+"])", generated_text.strip())
         if match:
             return match.group(1)
 
 
-        # Method 5: Last resort - check for any occurrence of the letters
-        for letter in ["A", "B", "C", "D"]:
+        # Method 5: Last resort - check for any occurrence of the uppercase
+        for letter in self.options:
             if letter in generated_text:
+                return letter
+        
+        # Method 6: lowercase and parens
+        text_lower = generated_text.lower()
+
+        for letter in self.options:
+            if letter.lower+")" in text_lower:
                 return letter
 
         # If all else fails, look for related words
-        text_lower = generated_text.lower()
-        if "first" in text_lower or "a)" in text_lower:
+        if "first" in text_lower:
             return "A"
-        elif "second" in text_lower or "b)" in text_lower:
+        elif "second" in text_lower:
             return "B"
-        elif "third" in text_lower or "c)" in text_lower:
+        elif "third" in text_lower:
             return "C"
-        elif "fourth" in text_lower or "d)" in text_lower:
+        elif "fourth" in text_lower:
             return "D"
+        elif "sorry" in text_lower:
+            return "E"
+        elif "not" in text_lower:
+            return "E"
 
         # If we still can't determine, return None
         return None
@@ -66,7 +77,7 @@ class MultipleChoiceLogitParser(MultipleChoiceParser):
         return self.extract_answer(logits, tokenizer)
 
     def extract_answer(self, logits, tokenizer):
-        """Get the most likely answer (A, B, C, D) based on logits."""
+        """Get the most likely answer (A, B, C, D, E) based on logits."""
         # Try different tokenization formats
         options = { option: [option, " "+option, option.lower(), " "+option.lower()] for option in self.options }
         option_chars = list(options.keys())
