@@ -190,11 +190,24 @@ def wand_b_sweep():
     sweep_configuration = {
         'method': 'random',
         'name': 'sweep',
-        'metric': {'goal': 'maximize', 'name': 'percent_win'},
+        'metric': {'goal': 'maximize', 'name': 'accuracy'},
         'parameters': {
-            'model': {'values': ['unsloth/Llama-3.2-3B-Instruct']},
-            'scoper_type':{'values': ['hardened_prompt_scoper']},#, 'linear_probe_scoper' ]}, # 'torch', 'linear_probe', 
-            'domains': {'values': [["astronomy"]]},
+            'model': {'values': ['unsloth/Llama-3.2-3B-Instruct', 'unsloth/Llama-3.2-1B-Instruct', 'unsloth/Meta-Llama-3.1-8B', 'google/gemma-2-27b' ]},
+            'scoper_type':{'values': ['circuit_breaker_scoper', 'prompt_classification_scoper','hardened_prompt_scoper','linear_probe_scoper' ]}, # 'torch', 'linear_probe', 
+            'domains': {'values': [
+                ["astronomy"], 
+                "stem", 
+                ['world_religions'],
+                ['virology'],
+                ['philosophy'],
+                ['marketing'],
+                ['astronomy'],
+                ['professional_law', 'jurisprudence', 'business_ethics'],
+                ['high_school_biology', 'college_biology', 'medical_genetics'],
+                ['high_school_mathematics', 'college_mathematics', 'elementary_mathematics'],
+                ['high_school_psychology', 'professional_psychology', 'moral_scenarios'],
+                ['high_school_world_history', 'high_school_european_history', 'high_school_us_history', 'prehistory']
+                ]},
             'dataset': {'value': 'mmlu'},
             'training_examples': {'value': 1000},
             'test_examples': {'value': 100},
@@ -203,7 +216,7 @@ def wand_b_sweep():
     }
 
     sweep_id = wandb.sweep(sweep=sweep_configuration, project='my-test-project')
-    wandb.agent(sweep_id, function=mmlu_iteration,  count=10)
+    wandb.agent(sweep_id, function=mmlu_iteration,  count=25)
 
 
 if __name__ == '__main__':
