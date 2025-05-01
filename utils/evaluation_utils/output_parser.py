@@ -53,17 +53,17 @@ class MultipleChoiceTextParser(MultipleChoiceParser):
 
         # If all else fails, look for related words
         if "first" in text_lower:
-            return "A"
+            return self.options[0]
         elif "second" in text_lower:
-            return "B"
+            return self.options[1]
         elif "third" in text_lower:
-            return "C"
+            return self.options[2]
         elif "fourth" in text_lower:
-            return "D"
-        elif "sorry" in text_lower:
-            return "E"
-        elif "not" in text_lower:
-            return "E"
+            return self.options[3]
+        elif len(self.options)>4 and "sorry" in text_lower:
+            return self.options[4]
+        elif len(self.options)>4 and "not" in text_lower:
+            return self.options[4]
 
         # If we still can't determine, return None
         return None
