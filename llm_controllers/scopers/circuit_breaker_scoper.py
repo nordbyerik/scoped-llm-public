@@ -233,7 +233,7 @@ class CircuitBreakerScoper(LLMController):
         # Circuit Breaker loss
         circuit_breaker_loss = 0
         if circuit_breaker_coeff > 0:
-            lora_circuit_breaker_outputs = ["hidden_states"]
+            lora_circuit_breaker_outputs = self.lora_model(**cb_inputs)["hidden_states"]
             layers_cb_attention_mask = circuit_breaker_attention_mask.unsqueeze(-1)
             
             # Process each layer separately to save memory

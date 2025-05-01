@@ -108,9 +108,9 @@ class ScopeClassifier(ActivationController):
 
         del activations
         torch.cuda.empty_cache()
-
-        inputs = self.tokenizer(prompts, return_tensors="pt", padding=True, truncation=True).to(self.model.device)
-        responses = self.model(**inputs)
+        with torch.no_grad():
+            inputs = self.tokenizer(prompts, return_tensors="pt", padding=True, truncation=True).to(self.model.device)
+            responses = self.model(**inputs)
 
         
         original_type = type(responses.logits)

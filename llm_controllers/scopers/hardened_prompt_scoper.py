@@ -82,9 +82,10 @@ class PromptClassificationScoper(LLMController):
         classifier_prompts = []
         for prompt in prompts:
             classifier_prompts.append(self.prompt_classifier_template.format(prompt=prompt))
-
-        inputs = self.tokenizer(classifier_prompts, return_tensors="pt", padding=True, truncation=True).to(self.model.device)
-        responses = self.model(**inputs)
+            
+        with torch.no_grad(), torch.amp.autocast('cuda'):  # Use mixed precision
+            inputs = self.tokenizer(classifier_prompts, return_tensors="pt", padding=True, truncation=True).to(self.model.device)
+            responses = self.model(**inputs)
 
                 
         original_type = type(responses.logits)

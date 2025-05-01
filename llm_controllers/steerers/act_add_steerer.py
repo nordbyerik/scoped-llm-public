@@ -92,8 +92,9 @@ class ActAddSteerer(ActivationController):
         # Process prompts in batches
         for prompt in prompts:
             prompt = [prompt]
-            inputs = self.tokenizer(prompt, return_tensors="pt", padding=True, truncation=True).to(self.model.device)
-            responses = self.model(**inputs)
+            with torch.no_grad():
+                inputs = self.tokenizer(prompt, return_tensors="pt", padding=True, truncation=True).to(self.model.device)
+                responses = self.model(**inputs)
             all_responses.append(responses)
         
         # Clean up after all processing

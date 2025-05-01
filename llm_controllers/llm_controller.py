@@ -76,7 +76,9 @@ class LLMController:
         
         # Set model to evaluation mode
         self.model.eval()
-
+    
+    def __call__(self, input_text):
+        return self.generate(input_text)
 
     def to(self, device):
         self.device = device
@@ -87,28 +89,15 @@ class LLMController:
         return self.model.module if isinstance(self.model, nn.DataParallel) or isinstance(self.model, DDP) else self.model
     
     def generate(self, prompt, max_length=100):
-        # Process input with optimized inference
-        inputs = self.tokenizer(prompt, return_tensors="pt")
 
         # Use generate method of optimized model
         with torch.no_grad(), torch.amp.autocast('cuda'):  # Use mixed precision
-            device = self.get_model().device
-            outputs = self.get_model().generate(
-                input_ids=inputs.input_ids.to(device),
-                attention_mask=inputs.attention_mask.to(device),
-                max_new_tokens=max_length,
-                pad_token_id=self.tokenizer.eos_token_id
-            )
+            inputs = self.tokenizer(prompt, return_tensors="pt", padding=True, truncation=True).to(self.model.device)
+            responses = self.model(**inputs)
 
-        # Decode and return generated text
-        generated_text = self.tokenizer.decode(
-            outputs[0][inputs.input_ids.shape[1]:],
-            skip_special_tokens=True
-        )
 
         torch.cuda.empty_cache()
-
-        return generated_text
+        return responses
     
     @abstractmethod
     def load(self, pathname):

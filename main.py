@@ -17,7 +17,7 @@ from torch.distributed import init_process_group, destroy_process_group
 import torch.distributed as dist
 from torch.utils.data import DataLoader, ConcatDataset, DataLoader
 
-from llm_controllers import LLMController
+from llm_controllers.llm_controller import LLMController
 from llm_controllers.steerers.prompt_steerer import PromptSteerer
 from llm_controllers.steerers.act_add_steerer import ActAddSteerer
 from llm_controllers.steerers.pca_steerer import PCASteerer
@@ -159,7 +159,6 @@ def mmlu_iteration(config=None):
         if not os.path.exists(folder):
             os.makedirs(folder)
 
-        plain_model = LLMController(model=config['model'], use_ddp=False)
 
         mmlu_evaluator = MMLUEvaluator(scoper.tokenizer, 'logits') # Provider might need API keys etc.
 
@@ -171,17 +170,25 @@ def mmlu_iteration(config=None):
         for i in range(0, len(questions), batch_size):
             batch = questions[i:i + batch_size]
 
+            batch_steered_output = scoper(batch).logits
+            batch_steered_output = batch_steered_output[:, -1]
+            if steered_output is None:
+                steered_output = torch.zeros((len(questions), batch_steered_output.shape[-1]))
+            steered_output[i:i + batch_size] = batch_steered_output
+
+        del scoper
+        torch.cuda.empty_cache()
+        plain_model = LLMController(model_name=config['model'], use_ddp=False)
+
+        plain_output = None
+        for i in range(0, len(questions), batch_size):
+            batch = questions[i:i + batch_size]
             batch_plain_output = plain_model(batch).logits
             batch_plain_output = batch_plain_output[:, -1]
             if plain_output is None:
                 plain_output = torch.zeros((len(questions), batch_plain_output.shape[-1]))
             plain_output[i:i + batch_size] = batch_plain_output
 
-            batch_steered_output = scoper(batch).logits
-            batch_steered_output = batch_steered_output[:, -1]
-            if steered_output is None:
-                steered_output = torch.zeros((len(questions), batch_steered_output.shape[-1]))
-            steered_output[i:i + batch_size] = batch_steered_output
 
         metrics = mmlu_evaluator(steered_output, plain_output, test_dataset)
 
@@ -202,8 +209,8 @@ def wand_b_sweep():
         'name': 'sweep',
         'metric': {'goal': 'maximize', 'name': 'accuracy'},
         'parameters': {
-            'model': {'values': ['Qwen/Qwen2.5-32B-Instruct']}, #'unsloth/Llama-3.2-3B-Instruct', 'unsloth/Llama-3.2-1B-Instruct' ]}, # 'Qwen/Qwen2.5-32B-Instruct', , 'google/gemma-3-12b-it'
-            'scoper_type':{'values': ['activation_steerer' ]}, #'circuit_breaker_scoper', 'prompt_classification_scoper','hardened_prompt_scoper','linear_probe_scoper']}, # 'torch', 'linear_probe', 
+            'model': {'values': ['unsloth/Llama-3.2-1B-Instruct', 'unsloth/Llama-3.2-3B-Instruct', 'unsloth/Llama-3.2-1B-Instruct', 'google/gemma-3-12b-it' ]}, 
+            'scoper_type':{'values': ['circuit_breaker_scoper','hardened_prompt_scoper', 'circuit_breaker_scoper', 'prompt_classification_scoper','hardened_prompt_scoper','linear_probe_scoper']}, # 'torch', 'linear_probe', 
             'domains': {'values': [
                 "stem", 
                 ['world_religions'],
