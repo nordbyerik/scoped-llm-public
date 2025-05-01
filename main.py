@@ -6,6 +6,7 @@ print(f"CUDA_LAUNCH_BLOCKING: {os.environ.get('CUDA_LAUNCH_BLOCKING')}")
 from dotenv import load_dotenv
 
 import numpy as np
+import math
 import matplotlib.pyplot as plt
 import seaborn as sns
 import wandb
@@ -16,6 +17,7 @@ from torch.distributed import init_process_group, destroy_process_group
 import torch.distributed as dist
 from torch.utils.data import DataLoader, ConcatDataset, DataLoader
 
+from llm_controllers import LLMController
 from llm_controllers.steerers.prompt_steerer import PromptSteerer
 from llm_controllers.steerers.act_add_steerer import ActAddSteerer
 from llm_controllers.steerers.pca_steerer import PCASteerer
@@ -155,30 +157,40 @@ def mmlu_iteration(config=None):
         if not os.path.exists(folder):
             os.makedirs(folder)
 
+        plain_model = LLMController(model=config['model'], use_ddp=False)
+
         mmlu_evaluator = MMLUEvaluator(scoper.tokenizer, 'logits') # Provider might need API keys etc.
 
         questions = test_dataset.data
         batch_size = 2
 
         steered_output = None
+        unsteered_output = None
         for i in range(0, len(questions), batch_size):
             batch = questions[i:i + batch_size]
+
+            batch_plain_output = plain_model(batch).logits
+            batch_plain_output = batch_plain_output[:, -1]
+            if plain_output is None:
+                plain_output = torch.zeros((len(questions), batch_plain_output.shape[-1]))
+            plain_output[i:i + batch_size] = batch_plain_output
+
             batch_steered_output = scoper(batch).logits
             batch_steered_output = batch_steered_output[:, -1]
             if steered_output is None:
                 steered_output = torch.zeros((len(questions), batch_steered_output.shape[-1]))
             steered_output[i:i + batch_size] = batch_steered_output
 
-        in_domain_accuracy, out_of_domain_accuracy, accuracy, precision, recall, f1_score = mmlu_evaluator(steered_output, test_dataset)
-        
-        wandb.log({"accuracy": accuracy, "precision": precision, "recall": recall, "f1_score": f1_score, "in_domain_accuracy": in_domain_accuracy, "out_of_domain_accuracy": out_of_domain_accuracy, "result": "success"})
+        metrics = mmlu_evaluator(steered_output, plain_output, test_dataset)
+
+        wandb.log({"metrics":metrics, "result": "success"})
     except Exception as e:
         print(f"Error on thi: {e}")
         return {"config": config, "result": "failed"}
     finally:
         run.finish()
 
-    return {"config": config, "accuracy": accuracy, "precision": precision, "recall": recall, "f1_score": f1_score, "in_domain_accuracy": in_domain_accuracy, "out_of_domain_accuracy": out_of_domain_accuracy, "result": "success"}
+    return {"config": config, "result": "success", "metrics": metrics}
 
 
 def wand_b_sweep():
