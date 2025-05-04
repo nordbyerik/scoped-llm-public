@@ -142,7 +142,7 @@ class ActivationController(LLMController):
         for batch_texts in dataloader:
 
             # Tokenize batch
-            inputs = self.tokenizer(
+            inputs =  self.tokenizer(
                 batch_texts, return_tensors='pt', padding=True, truncation=True,
                 max_length=10000 # Adjust if needed
             ).to(self.model.device)

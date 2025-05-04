@@ -1,0 +1,107 @@
+# Experiment Methodology Summary
+
+## Overview
+This document summarizes the methodology used in the experiments for controlling and steering Large Language Models (LLMs) through various techniques including activation steering, circuit breaking, and linear probes.
+
+## Core Components
+
+### 1. LLM Controllers
+The experiments utilize a hierarchical system of controllers:
+- **LLMController**: Base class that handles model loading, tokenization, and generation
+- **ActivationController**: Extends the base controller to manipulate model activations
+- **ActAddSteerer**: Implements activation steering by adding vectors to model activations
+- **CircuitBreakerScoper**: Implements circuit breaking to control model behavior
+
+### 2. Scoping Mechanisms
+Several scoping mechanisms are implemented to control model behavior:
+- **Circuit Breaker Scoping**: Uses LoRA fine-tuning to create "circuit breakers" that detect and modify out-of-domain inputs
+- **Linear Probe Scoping**: Uses linear probes to classify inputs and steer model behavior
+- **Hardened Prompt Scoping**: Uses prompt engineering techniques to control model outputs
+- **Activation Steering**: Directly modifies model activations to guide outputs
+
+## Methodology
+
+### Data Preparation
+1. **Dataset Selection**:
+   - MMLU (Massive Multitask Language Understanding) dataset for knowledge evaluation
+   - Persuade dataset for sentiment control experiments
+   - SNI dataset for additional testing
+
+2. **Data Splitting**:
+   - In-domain vs. out-of-domain data separation
+   - Training/test splits for evaluation
+
+### Training Process
+
+#### Activation Steering
+1. Extract activations from positive and negative examples
+2. Calculate the difference vector between positive and negative activations
+3. Use this vector to steer model outputs during generation
+4. Apply normalization to maintain activation magnitudes
+
+#### Circuit Breaking
+1. Train a LoRA model on in-domain examples to maintain performance
+2. Simultaneously train it to diverge from the base model on out-of-domain examples
+3. Use cosine similarity to detect when the circuit breaker should trigger
+4. Apply progressive training with scheduled coefficients
+
+### Layer Selection Strategies
+The experiments test various layer selection strategies:
+- "all": All layers
+- "last": Only the final layer
+- "first": Only the first layer
+- "middle": Only the middle layer
+- "last_N": Last N layers
+- "every_5th": Every 5th layer plus the last
+- "first_and_last": First and last layers only
+
+### Evaluation
+1. **MMLU Evaluation**:
+   - Test on both in-domain and out-of-domain questions
+   - Compare steered vs. unsteered model performance
+   - Measure accuracy improvements
+
+2. **Persuade Evaluation**:
+   - Generate feedback with steered and unsteered models
+   - Compare feedback quality using human evaluators
+   - Calculate win percentage for steered outputs
+
+## Models Tested
+The experiments were conducted on various models:
+- unsloth/Llama-3.2-1B-Instruct
+- unsloth/Llama-3.2-3B-Instruct
+- deepseek-ai/DeepSeek-R1-Distill-Qwen-7B
+- unsloth/gemma-3-12b-it
+- Qwen/Qwen2.5-32B-Instruct
+- microsoft/Phi-4-reasoning
+
+## Technical Implementation
+1. **Activation Extraction**:
+   - Extract hidden states from specified layers
+   - Apply aggregation methods (mean, max, last token)
+   - Store activation vectors for later use
+
+2. **Steering Implementation**:
+   - Wrap model layers with SteeringLayer class
+   - Apply transformation functions during forward pass
+   - Normalize activations to prevent magnitude issues
+
+3. **Circuit Breaking**:
+   - Use LoRA for parameter-efficient fine-tuning
+   - Apply different loss functions for in-domain vs. out-of-domain inputs
+   - Detect circuit breaking using cosine similarity thresholds
+
+4. **Distributed Training**:
+   - Support for distributed data parallel (DDP) training
+   - Batch processing for memory efficiency
+   - GPU memory optimization techniques
+
+## Visualization and Analysis
+The experiments include tools for:
+- Visualizing activations using t-SNE and PCA
+- Analyzing steering vectors
+- Plotting layer accuracies
+- Tracking performance with wandb
+
+## Conclusion
+The methodology demonstrates various approaches to controlling LLM behavior through direct manipulation of model activations and fine-tuning techniques. The experiments compare these approaches across different models, domains, and layer selection strategies to identify the most effective methods for steering model outputs.

@@ -86,6 +86,8 @@ class LLMController:
         return self
 
     def get_model(self):
+        if 'gemma' in self.model.name_or_path:
+            return self.model.base_model
         return self.model.module if isinstance(self.model, nn.DataParallel) or isinstance(self.model, DDP) else self.model
     
     def generate(self, prompt, max_length=100):

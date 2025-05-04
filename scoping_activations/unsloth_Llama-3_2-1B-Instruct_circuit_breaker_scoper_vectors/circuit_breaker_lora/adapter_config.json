@@ -30,10 +30,10 @@
   "rank_pattern": {},
   "revision": null,
   "target_modules": [
-    "o_proj",
-    "v_proj",
     "k_proj",
-    "q_proj"
+    "o_proj",
+    "q_proj",
+    "v_proj"
   ],
   "task_type": "CAUSAL_LM",
   "trainable_token_indices": null,

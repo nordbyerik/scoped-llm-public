@@ -192,6 +192,10 @@ def mmlu_iteration(config=None):
 
         metrics = mmlu_evaluator(steered_output, plain_output, test_dataset)
 
+        results = {"config": config, "metrics": metrics}
+        with open("logs.txt", "a") as f:
+            f.write(str(results) + "\n")
+
         wandb.log({"metrics":metrics, "result": "success"})
     except Exception as e:
         print(f"Error on thi: {e}")
@@ -208,21 +212,14 @@ def wand_b_sweep():
         'method': 'random',
         'name': 'sweep',
         'metric': {'goal': 'maximize', 'name': 'accuracy'},
-        'parameters': {
-            'model': {'values': ['unsloth/Llama-3.2-1B-Instruct', 'unsloth/Llama-3.2-3B-Instruct', 'unsloth/Llama-3.2-1B-Instruct', 'google/gemma-3-12b-it' ]}, 
-            'scoper_type':{'values': ['circuit_breaker_scoper','hardened_prompt_scoper', 'circuit_breaker_scoper', 'prompt_classification_scoper','hardened_prompt_scoper','linear_probe_scoper']}, # 'torch', 'linear_probe', 
+        'parameters': { 
+            'model': {'values': ['unsloth/Llama-3.2-1B-Instruct', 'unsloth/Llama-3.2-3B-Instruct', 'unsloth/Meta-Llama-3.1-8B'  ]}, 
+            'scoper_type':{'values': ['linear_probe_scoper']}, # 'torch', 'linear_probe', 
             'domains': {'values': [
                 "stem", 
                 ['world_religions'],
-                ['virology'],
-                ['philosophy'],
-                ['marketing'],
-                ['astronomy'],
+                ['high_school_mathematics'],
                 ['professional_law', 'jurisprudence', 'business_ethics'],
-                ['high_school_biology', 'college_biology', 'medical_genetics'],
-                ['high_school_mathematics', 'college_mathematics', 'elementary_mathematics'],
-                ['high_school_psychology', 'professional_psychology', 'moral_scenarios'],
-                ['high_school_world_history', 'high_school_european_history', 'high_school_us_history', 'prehistory']
                 ]},
             'dataset': {'value': 'mmlu'},
             'training_examples': {'value': 1000},

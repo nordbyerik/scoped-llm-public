@@ -37,7 +37,7 @@ class ActAddSteerer(ActivationController):
 
     # TODO: Allow this to store different steering vectors and combine them
     def train(self, positive_prompts, negative_prompts, batch_size=8, aggregation_calc="last", vector_type="all"):
-        self.steering_vectors[vector_type] = self.extract_average_diff(positive_prompts, negative_prompts, batch_size, aggregation_calc)
+        self.steering_vectors[vector_type] = self.extract_average_diff(positive_prompts.data, negative_prompts.data, batch_size, aggregation_calc)
         return self.steering_vectors
     
     def generate(self, prompts, coeff=1):
