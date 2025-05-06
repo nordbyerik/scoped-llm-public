@@ -6,16 +6,10 @@ print(f"CUDA_LAUNCH_BLOCKING: {os.environ.get('CUDA_LAUNCH_BLOCKING')}")
 from dotenv import load_dotenv
 
 import numpy as np
-import math
-import matplotlib.pyplot as plt
-import seaborn as sns
 import wandb
-from sklearn.metrics.pairwise import cosine_similarity
 
 import torch
-from torch.distributed import init_process_group, destroy_process_group
-import torch.distributed as dist
-from torch.utils.data import DataLoader, ConcatDataset, DataLoader
+from torch.utils.data import DataLoader, DataLoader
 
 from llm_controllers.llm_controller import LLMController
 from llm_controllers.steerers.prompt_steerer import PromptSteerer
@@ -29,7 +23,6 @@ from llm_controllers.scopers.circuit_breaker_scoper import CircuitBreakerScoper
 
 from utils.dataset_utils.persuade_dataset import PersuadeDataset
 from utils.dataset_utils.mmlu_dataset import MMLUDataset
-from utils.dataset_utils.sni_dataset import SNIDataset
 
 from utils.evaluation_utils.evaluator import FeedbackEvaluator
 from utils.evaluation_utils.mmlu_evaluator import MMLUEvaluator
@@ -159,6 +152,7 @@ def mmlu_iteration(config=None):
         if not os.path.exists(folder):
             os.makedirs(folder)
 
+        plain_model = LLMController(config['model'], use_ddp=False)
 
         mmlu_evaluator = MMLUEvaluator(scoper.tokenizer, 'logits') # Provider might need API keys etc.
 

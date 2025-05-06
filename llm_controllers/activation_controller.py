@@ -160,7 +160,7 @@ class ActivationController(LLMController):
 
                 outputs = self.model(**inputs, output_hidden_states=hidden_out, output_attentions=attention_out) # We only need activations via hooks
             
-            torch.cuda.synchronize()
+            
             # Collect activations from hooks for this batch
             for layer_number in layers_to_calculate:
                 batch_hidden = outputs.hidden_states[layer_number]

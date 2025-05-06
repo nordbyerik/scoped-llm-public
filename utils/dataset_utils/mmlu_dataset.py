@@ -84,12 +84,15 @@ class MMLUDataset(Dataset):
                 if subject not in self.domains:
                     continue
 
-                path = os.path.join('mmlu_dataset', f"mmlu_dataset_{subject}_{split}_{sample_size}.pkl")
-                if os.path.exists(path):
-                    dataset = pickle.load(open(path, 'rb'))
+                data_path = os.path.join('mmlu_dataset', f"mmlu_dataset_{subject}_{split}_{sample_size}.pkl")
+                if not os.path.exists('mmlu_dataset'):
+                    os.makedirs('mmlu_dataset')
+                if os.path.exists(data_path):
+                    dataset = pickle.load(open(data_path, 'rb'))
                 else:
                     dataset = load_dataset("cais/mmlu", subject, split=split)
-                    pickle.dump(dataset, open(path, 'wb'))
+                    raw_data = [example for example in dataset]
+                    pickle.dump(raw_data, open(data_path, 'wb'))
 
 
                 max_examples = min(len(dataset), sample_size // len(self.domains))
