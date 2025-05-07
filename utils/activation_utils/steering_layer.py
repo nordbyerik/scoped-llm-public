@@ -54,11 +54,11 @@ class SteeringLayer(nn.Module):
         """
 
         # original_norm = hidden_states.norm(dim=-1, keepdim=True)
-
         if not self.is_multi_steering:
             self._apply_single_behavior(hidden_states)
         else:
             self._apply_multi_behaviors(hidden_states)
+        
         
         return self.layer(hidden_states, *args, **kwargs)
 
@@ -70,7 +70,9 @@ class SteeringLayer(nn.Module):
             hidden_states: The hidden states to modify.
         """
         if self.transformation_function is not None:
-            hidden_states[0] = self.transformation_function(hidden_states[0])
+            # Apply in-place if possible to avoid creating unnecessary copies
+            self.transformation_function(hidden_states)
+
 
     def _apply_multi_behaviors(self, hidden_states):
         """

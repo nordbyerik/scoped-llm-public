@@ -2,6 +2,7 @@ from llm_controllers.llm_controller import LLMController
 import torch
 import numpy as np
 import os
+import gc
 
 from torch.utils.data import DataLoader, DistributedSampler
 import torch.distributed as dist
@@ -14,10 +15,11 @@ from sklearn.manifold import TSNE
 from utils.activation_utils.steering_layer import SteeringLayer
 
 class ActivationController(LLMController):
-    def __init__(self, model, selected_layers=None, use_ddp=True, save_folder_path="."):
+    def __init__(self, model, selected_layers='all', use_ddp=True, save_folder_path="."):
         super().__init__(model, use_ddp)
 
         self.save_folder_path = save_folder_path
+        self.overwrite = True
 
         model = self.get_model()
         layers = self.get_model().model.layers
@@ -113,7 +115,7 @@ class ActivationController(LLMController):
         aggregated_cpu_numpy = aggregated_gpu.detach().cpu().numpy()
         return aggregated_cpu_numpy
 
-    def extract_activations(self, texts, batch_size=1, aggregation_calc="last", activation_name='neutral'):
+    def extract_activations(self, texts, batch_size=10, aggregation_calc="last", activation_name='neutral'):
         # ---> Create DistributedSampler if DDP is active <---
         sampler = DistributedSampler(texts, shuffle=False) if self.is_ddp else None # 
         dataloader = DataLoader(texts, batch_size=batch_size, sampler=sampler)
@@ -127,7 +129,7 @@ class ActivationController(LLMController):
                 continue
 
             path = os.path.join(self.save_folder_path, f"layer_{layer_number}_{activation_name}.pt")
-            if os.path.exists(path):
+            if os.path.exists(path) and not self.overwrite:
                 all_activations[layer_number] = torch.load(path)
             else:
                 layers_to_calculate.append(layer_number)
@@ -140,7 +142,7 @@ class ActivationController(LLMController):
         for batch_texts in dataloader:
 
             # Tokenize batch
-            inputs = self.tokenizer(
+            inputs =  self.tokenizer(
                 batch_texts, return_tensors='pt', padding=True, truncation=True,
                 max_length=10000 # Adjust if needed
             ).to(self.model.device)
@@ -158,7 +160,7 @@ class ActivationController(LLMController):
 
                 outputs = self.model(**inputs, output_hidden_states=hidden_out, output_attentions=attention_out) # We only need activations via hooks
             
-            torch.cuda.synchronize()
+            
             # Collect activations from hooks for this batch
             for layer_number in layers_to_calculate:
                 batch_hidden = outputs.hidden_states[layer_number]
@@ -182,6 +184,8 @@ class ActivationController(LLMController):
                 if not os.path.exists(self.save_folder_path):
                     os.mkdir(self.save_folder_path)
 
+                gc.collect()
+                torch.cuda.empty_cache()
 
             del inputs, outputs # Free memory
             torch.cuda.empty_cache()
@@ -198,7 +202,7 @@ class ActivationController(LLMController):
         
         for layer_name in all_activations_gathered:
             if layer_name in layers_to_calculate:
-                all_activations_gathered[layer_name] = torch.stack(all_activations_gathered[layer_name])
+                all_activations_gathered[layer_name] = torch.vstack(all_activations_gathered[layer_name])
 
             if activation_name is None:
                 continue

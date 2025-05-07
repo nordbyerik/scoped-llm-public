@@ -62,10 +62,13 @@ class MultipleChoiceLogitParser(MultipleChoiceParser):
     def __init__(self, options):
         super().__init__(options)
 
-    def extract_answer(logits, tokenizer):
+    def __call__(self, logits, tokenizer):
+        return self.extract_answer(logits, tokenizer)
+
+    def extract_answer(self, logits, tokenizer):
         """Get the most likely answer (A, B, C, D) based on logits."""
         # Try different tokenization formats
-        options = { option: [option, " "+option, option.lower(), " "+option.lower()] for option in options }
+        options = { option: [option, " "+option, option.lower(), " "+option.lower()] for option in self.options }
         option_chars = list(options.keys())
 
         option_probs = []
@@ -84,6 +87,6 @@ class MultipleChoiceLogitParser(MultipleChoiceParser):
 
 
         # Return the option with highest probability
-        return option_chars[np.argmax(option_probs)]
+        return np.argmax(option_probs)
 
 
