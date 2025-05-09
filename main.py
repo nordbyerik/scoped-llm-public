@@ -6,6 +6,7 @@ print(f"CUDA_LAUNCH_BLOCKING: {os.environ.get('CUDA_LAUNCH_BLOCKING')}")
 from dotenv import load_dotenv
 
 import numpy as np
+
 import wandb
 
 import torch
@@ -80,38 +81,24 @@ def evaluate_persuade(config, steerer, test_texts, encouraging=False ):
     return generated_outputs,total_steered_winner,percent_win
 
 
-def load_mmlu(domains: List[str], training_examples=100, train_test_split=0.8):
+def load_mmlu(domains: List[str], training_examples=100, test_percentage=0.8):
     # TODO: Kinda gross.. maybe use DataLoader instead
-    in_domain = MMLUDataset(sample_size=training_examples // 2, split='test', domains=domains, in_domain=True)
-    out_of_domain = MMLUDataset(sample_size=training_examples // 2, split='test', domains=domains, in_domain=False)
-
+    in_domain = MMLUDataset(sample_size=training_examples // 2, split='test', domains=domains, in_domain=True, test_percentage=test_percentage)
+    out_of_domain = MMLUDataset(sample_size=training_examples // 2, split='test', domains=domains, in_domain=False, test_percentage=test_percentage)
 
     # For out-of-domain data
-    ood_total = len(out_of_domain)
-    ood_test_count = int(ood_total * (1-train_test_split))
-    ood_test_indices = np.random.choice(ood_total, size=ood_test_count, replace=False if ood_test_count < ood_total else True)
-    ood_train_indices = [i for i in range(ood_total) if i not in ood_test_indices]
-    test_ood = out_of_domain[ood_test_indices]
-    train_ood = out_of_domain[ood_train_indices]
-
-    # For in-domain data
-    in_total = len(in_domain)
-    in_test_count = int(in_total * (1-train_test_split))
-    in_test_indices = np.random.choice(in_total, size=in_test_count, replace=False if in_test_count < in_total else True)
-    in_train_indices = [i for i in range(in_total) if i not in in_test_indices]
-    test_in_domain = in_domain[in_test_indices]
-    train_in_domain = in_domain[in_train_indices]
+    in_domain_train = in_domain.get_train_dataset()
+    in_domain_test = in_domain.get_test_dataset()
+    out_of_domain_train = out_of_domain.get_train_dataset()
+    out_of_domain_test = out_of_domain.get_test_dataset()
 
     # Combine test datasets
     test_dataset = MMLUDataset.__new__(MMLUDataset)
-    test_dataset.data = test_ood.data + test_in_domain.data
-    test_dataset.answers = test_ood.answers + test_in_domain.answers
-    test_dataset.in_domain = [0]*len(test_ood) + [1]*len(test_in_domain)
+    test_dataset.data = out_of_domain_test.data + in_domain_test.data
+    test_dataset.answers = out_of_domain_test.answers + in_domain_test.answers
+    test_dataset.in_domain = [0]*len(out_of_domain_test) + [1]*len(in_domain_test)
 
-    # Update training datasets
-    out_of_domain = train_ood
-    in_domain = train_in_domain
-    return in_domain, out_of_domain, test_dataset
+    return in_domain_train, out_of_domain_train, test_dataset
 
 
 
@@ -127,11 +114,15 @@ def mmlu_iteration(config=None):
     config = wandb.config
 
 
-
     try:
         torch.cuda.empty_cache()
 
-        in_domain, out_of_domain, test_dataset = load_mmlu(domains=config['domains'], training_examples=config['training_examples'])
+        in_domain, out_of_domain, test_dataset = load_mmlu(
+            domains=config['domains'], 
+            training_examples=config['training_examples'], 
+            test_percentage=config['test_percentage']
+            )
+        
         model_name = config['model'].replace('.', '_').replace('/', '_')
         filename = f"{model_name}_{config['scoper_type']}_vectors"
         folder = os.path.join(os.getcwd(), "scoping_activations")
@@ -152,7 +143,6 @@ def mmlu_iteration(config=None):
         if not os.path.exists(folder):
             os.makedirs(folder)
 
-        plain_model = LLMController(config['model'], use_ddp=False)
 
         mmlu_evaluator = MMLUEvaluator(scoper.tokenizer, 'logits') # Provider might need API keys etc.
 
@@ -183,7 +173,6 @@ def mmlu_iteration(config=None):
                 plain_output = torch.zeros((len(questions), batch_plain_output.shape[-1]))
             plain_output[i:i + batch_size] = batch_plain_output
 
-
         metrics = mmlu_evaluator(steered_output, plain_output, test_dataset)
 
         results = {"config": config, "metrics": metrics}
@@ -212,12 +201,12 @@ def wand_b_sweep():
             'domains': {'values': [
                 "stem", 
                 ['world_religions'],
-                ['high_school_mathematics'],
+                ['high_school_chemistry'],
                 ['professional_law', 'jurisprudence', 'business_ethics'],
                 ]},
             'dataset': {'value': 'mmlu'},
-            'training_examples': {'value': 1000},
-            'test_examples': {'value': 100},
+            'training_examples': {'value': 100},
+            'test_percentage': {'value': .2},
             'batch_size': {'value': 2}
         },
     }

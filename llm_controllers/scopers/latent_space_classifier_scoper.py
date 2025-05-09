@@ -47,8 +47,6 @@ class ScopeClassifier(ActivationController):
         for layer_name in positive_activations:
             positive_examples = np.array(positive_activations[layer_name].cpu())
             negative_examples = np.array(negative_activations[layer_name].cpu())
-            print("Positive Examples Lne", len(positive_examples))
-            print("Negative Examples Lne", len(negative_examples))
 
             labels = [1] * len(positive_examples) + [0] * len(negative_examples)
 

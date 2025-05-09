@@ -3,9 +3,12 @@ import numpy as np
 import pickle
 from datasets import load_dataset
 from torch.utils.data import Dataset, Subset
-from typing import List
+from typing import List, Dict, Tuple
 
-mmlu_subjects = {
+
+
+class MMLUDataset(Dataset):
+    mmlu_subjects = {
             'stem': [
                 'abstract_algebra', 'astronomy', 'college_biology', 'college_chemistry',
                 'college_computer_science', 'college_mathematics', 'college_physics',
@@ -30,87 +33,73 @@ mmlu_subjects = {
             ]
     }
 
-class MMLUDataset(Dataset):
-    def __init__(self, sample_size=1000, split='validation', domains='stem', in_domain=True):
-        # Grab stem
+    def __init__(self, sample_size: int = 1000, split: str = 'validation', 
+                 domains: str = 'stem', in_domain: bool = True, test_percentage: float = 0.2):
+        self.domains = self._get_domains(domains, in_domain)
+        self.data, self.answers = self._load_data(sample_size, split)
+        self.in_domain = [int(in_domain)] * len(self.data)
+        self.train_indices, self.test_indices = self._train_test_split(test_percentage)
 
-        if (domains == 'stem' and in_domain) or (domains == 'non_stem' and not in_domain):
-            domains = mmlu_subjects['stem']
-        # Grab non-stem
-        elif (domains == 'stem' and not in_domain) or (domains == 'non_stem' and in_domain):
-            domains = mmlu_subjects['non_stem']
-        # Grab all
-        elif (not in_domain):
-            out_domains = []
-            for category, subjects in mmlu_subjects.items():
-                for subject in subjects:
-                    if subject not in domains:
-                        out_domains.append(subject)
-            domains = out_domains
-        self.domains = domains
-        
-        self.data, self.answers = self.get_data(sample_size, split)
-        self.in_domain = [int(in_domain) for _ in range(len(self.data))]
-    
-    def __len__(self):
+    def __len__(self) -> int:
         return len(self.data)
-    
+
     def __getitem__(self, idx):
-
         if isinstance(idx, (list, np.ndarray)):
-            # Return a new dataset with the specified indices
-            subset_data = [self.data[i] for i in idx]
-            subset_answers = [self.answers[i] for i in idx]
-            subset_in_domain = [self.in_domain[i] for i in idx]
-            
-            new_dataset = MMLUDataset.__new__(MMLUDataset)  # Create new instance without calling __init__
-            new_dataset.data = subset_data
-            new_dataset.answers = subset_answers
-            new_dataset.in_domain = subset_in_domain
-            return new_dataset
-        else:
-            return {
-                "question": self.data[idx],
-                "answer": self.answers[idx],
-                "in_domain": self.in_domain[idx]
-            }
+            return self._create_subset(idx)
+        return self._get_single_item(idx)
 
-    def get_data(self, sample_size=1000, split='validation'):
+    def _get_domains(self, domains: str, in_domain: bool) -> List[str]:
+        if domains in ['stem', 'non_stem']:
+            return self.mmlu_subjects['stem' if (domains == 'stem') == in_domain else 'non_stem']
+        if not in_domain:
+            return [subject for category in self.mmlu_subjects.values() for subject in category if subject not in domains]
+        return domains
 
-        
-        data = []
-        for category, subjects in mmlu_subjects.items():
-            for subject in subjects:
-                if subject not in self.domains:
-                    continue
+    def _load_data(self, sample_size: int, split: str) -> Tuple[List[str], List[str]]:
+        all_data = []
+        for subject in self.domains:
+            subject_data = self._load_subject_data(subject, sample_size, split)
+            all_data.extend(subject_data)
 
-                data_path = os.path.join('mmlu_dataset', f"mmlu_dataset_{subject}_{split}_{sample_size}.pkl")
-                if not os.path.exists('mmlu_dataset'):
-                    os.makedirs('mmlu_dataset')
-                if os.path.exists(data_path):
-                    dataset = pickle.load(open(data_path, 'rb'))
-                else:
-                    dataset = load_dataset("cais/mmlu", subject, split=split)
-                    raw_data = [example for example in dataset]
-                    pickle.dump(raw_data, open(data_path, 'wb'))
+        if len(all_data) > sample_size:
+            np.random.shuffle(all_data)
+            all_data = all_data[:sample_size]
 
+        formatted_data, answers = self._format_data(all_data)
+        return formatted_data, answers
 
-                max_examples = min(len(dataset), sample_size // len(self.domains))
-                indices = np.random.choice(len(dataset), size=max_examples, replace=False)
+    def _load_subject_data(self, subject: str, sample_size: int, split: str) -> List[Dict]:
+        data_path = os.path.join('mmlu_dataset', f"mmlu_dataset_{subject}_{split}_{sample_size}.pkl")
+        os.makedirs('mmlu_dataset', exist_ok=True)
 
-                for i in indices:
-                    example = dataset[int(i)]
-                    data.append({
-                        'question': example['question'],
-                        'choices': [example['choices'][i] for i in range(4)],
-                        'answer': example['answer']
-                    })
-                del dataset
+        if os.path.exists(data_path):
+            return pickle.load(open(data_path, 'rb'))
 
-        # Format MMLU examples for evaluation
+        dataset = load_dataset("cais/mmlu", subject, split=split)
+        raw_data = list(dataset)
+        pickle.dump(raw_data, open(data_path, 'wb'))
+
+        max_examples = min(len(dataset), sample_size // len(self.domains))
+        max_examples = max(1, max_examples)
+        indices = np.random.choice(len(dataset), size=max_examples, replace=False)
+
+        return [self._format_example(dataset[int(i)]) for i in indices]
+
+    @staticmethod
+    def _format_example(example: Dict) -> Dict:
+        return {
+            'question': example['question'],
+            'choices': [example['choices'][i] for i in range(4)],
+            'answer': example['answer']
+        }
+
+    @staticmethod
+    def _format_data(data: List[Dict]) -> Tuple[List[str], List[str]]:
         prompt_template = "Question: {question}\nA. {A}\nB. {B}\nC. {C}\nD. {D}\nAnswer:"
-        def format_mmlu_example(example, prompt_template):
-            """Format an MMLU example using the prompt template."""
+        formatted_data = []
+        answers = []
+
+        for example in data:
             formatted = prompt_template.format(
                 question=example['question'],
                 A=example['choices'][0],
@@ -118,13 +107,40 @@ class MMLUDataset(Dataset):
                 C=example['choices'][2],
                 D=example['choices'][3]
             )
-            return formatted
-
-        formatted_data = []
-        answers = [example['answer'] for example in data]
-        for example in data:
-            formatted_example = format_mmlu_example(example, prompt_template)
-            formatted_data.append(formatted_example)
-        
+            formatted_data.append(formatted)
+            answers.append(example['answer'])
 
         return formatted_data, answers
+
+    def _train_test_split(self, test_size: float) -> Tuple[List[int], List[int]]:
+        indices = list(range(len(self.data)))
+        np.random.shuffle(indices)
+        split_point = int(len(indices) * (1 - test_size))
+
+        assert len(indices) > 1, "Dataset must contain at least two examples for splitting."  # Ensure there are enough examples to split
+        split_point = max(1, split_point)  # Ensure at least one example in training set
+        split_point = min(len(indices) - 1, split_point)  # Ensure at least one example in test set
+        
+        return indices[:split_point], indices[split_point:]
+
+    def _create_subset(self, indices: List[int]) -> 'MMLUDataset':
+        subset = MMLUDataset.__new__(MMLUDataset)
+        subset.data = [self.data[i] for i in indices]
+        subset.answers = [self.answers[i] for i in indices]
+        subset.in_domain = [self.in_domain[i] for i in indices]
+        return subset
+
+    def _get_single_item(self, idx: int) -> Dict:
+        return {
+            "question": self.data[idx],
+            "answer": self.answers[idx],
+            "in_domain": self.in_domain[idx]
+        }
+
+    def get_train_dataset(self) -> Subset:
+        subset = Subset(self, self.train_indices)
+        return subset.dataset[subset.indices]
+
+    def get_test_dataset(self) -> Subset:
+        subset = Subset(self, self.test_indices)
+        return subset.dataset[subset.indices]

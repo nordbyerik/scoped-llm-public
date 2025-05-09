@@ -59,29 +59,25 @@ class MultipleChoiceTextParser(MultipleChoiceParser):
 
 
 class MultipleChoiceLogitParser(MultipleChoiceParser):
-    def __init__(self, options):
+    def __init__(self, options, tokenizer):
         super().__init__(options)
-
+        self.option_variations = { option: [option, " "+option, option.lower(), " "+option.lower()] for option in self.options }
+        
+        self.token_ids = {}
+        for option, variations in self.option_variations.items():
+            self.token_ids[option] = [
+                tokenizer(variation, add_special_tokens=False).input_ids[-1] for variation in variations
+            ]
+        
     def __call__(self, logits, tokenizer):
         return self.extract_answer(logits, tokenizer)
 
     def extract_answer(self, logits, tokenizer):
         """Get the most likely answer (A, B, C, D) based on logits."""
         # Try different tokenization formats
-        options = { option: [option, " "+option, option.lower(), " "+option.lower()] for option in self.options }
-        option_chars = list(options.keys())
 
         option_probs = []
-
-        for option, variations in options.items():
-            # Get token IDs for all variations, considering both spaced and unspaced forms
-            token_ids = set()
-            for variation in variations:
-                token_ids.update([
-                    tokenizer(variation, add_special_tokens=False).input_ids[-1],  # Unspaced
-                ])
-
-            # Sum the logits across all token variations
+        for option, token_ids in self.token_ids.items():
             option_prob = max(logits[token_id].item() for token_id in token_ids)
             option_probs.append(option_prob)
 
