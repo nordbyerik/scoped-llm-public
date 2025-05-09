@@ -1,6 +1,6 @@
 import os
 from typing import List
-# os.environ['CUDA_LAUNCH_BLOCKING'] = "1"
+os.environ['CUDA_LAUNCH_BLOCKING'] = "1"
 # os.environ['TORCH_USE_CUDA_DSA'] = "1"
 print(f"CUDA_LAUNCH_BLOCKING: {os.environ.get('CUDA_LAUNCH_BLOCKING')}")
 from dotenv import load_dotenv
@@ -127,7 +127,7 @@ def mmlu_iteration(config=None):
         filename = f"{model_name}_{config['scoper_type']}_vectors"
         folder = os.path.join(os.getcwd(), "scoping_activations")
         path = str(os.path.join(folder, filename))
-
+        
         if config['scoper_type'] == 'linear_probe_scoper':
             scoper = ScopeClassifier(config['model'], save_folder_path=path)
         elif config['scoper_type'] == 'hardened_prompt_scoper':
@@ -196,12 +196,11 @@ def wand_b_sweep():
         'name': 'sweep',
         'metric': {'goal': 'maximize', 'name': 'accuracy'},
         'parameters': { 
-            'model': {'values': ['unsloth/Llama-3.2-1B-Instruct', 'unsloth/Llama-3.2-3B-Instruct', 'unsloth/Meta-Llama-3.1-8B'  ]}, 
-            'scoper_type':{'values': ['linear_probe_scoper']}, # 'torch', 'linear_probe', 
+            'model': {'values': ['meta-llama/Llama-3.3-70B-Instruct', 'google/gemma-2-27b-it', 'unsloth/Llama-3.2-1B']}, 
+            'scoper_type':{'values': ['linear_probe_scoper', 'hardened_prompt_scoper', 'circuit_breaker_scoper', 'activation_steerer']}, # 'torch', 'linear_probe', 
             'domains': {'values': [
                 "stem", 
                 ['world_religions'],
-                ['high_school_chemistry'],
                 ['professional_law', 'jurisprudence', 'business_ethics'],
                 ]},
             'dataset': {'value': 'mmlu'},
@@ -218,6 +217,43 @@ def wand_b_sweep():
 if __name__ == '__main__':
     torch.cuda.empty_cache()
     load_dotenv()
+
+
+if __name__ == '__main__':
+    import torch
+    from transformers import AutoModelForCausalLM, AutoTokenizer
+    import pickle
+    
+    from transformers import BitsAndBytesConfig
+
+    if False:
+        bnb_config = BitsAndBytesConfig(
+                load_in_4bit=True,
+                bnb_4bit_quant_type="nf4",
+                bnb_4bit_compute_dtype=torch.bfloat16,
+                bnb_4bit_use_double_quant=True,
+            )
+        # Example usage
+        model = AutoModelForCausalLM.from_pretrained(
+                "Qwen/Qwen3-32B",
+                #quantization_config=bnb_config,
+                attn_implementation="eager",
+                low_cpu_mem_usage=True,
+                trust_remote_code=True,
+                #device_map="auto"
+        )
+        tokenizer = AutoTokenizer.from_pretrained("Qwen/Qwen3-32B")
+
+        texts = pickle.load(open('inputs.pkl', 'rb'))
+        inputs = tokenizer(texts[0], return_tensors='pt', padding=True, truncation=True, max_length=4).to(model.device)
+        outputs = model(**inputs, output_hidden_states=True)
+        print(outputs)
+
+        del model
+        del tokenizer
+        del inputs
+        del outputs
+        torch.cuda.empty_cache()
 
     wand_b_sweep()
 

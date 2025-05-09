@@ -58,11 +58,11 @@ class LLMController:
         # Load the model
         self.model = AutoModelForCausalLM.from_pretrained(
             model_name,
-            quantization_config=bnb_config,
+            # quantization_config=bnb_config,
             attn_implementation="eager",
             low_cpu_mem_usage=True,
             trust_remote_code=True,
-            device_map="balanced", # Change from "auto" to "balanced"
+            #device_map="balanced", # Change from "auto" to "balanced"
         )
         
         # Wrap with DDP if in distributed mode

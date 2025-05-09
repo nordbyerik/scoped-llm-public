@@ -13,6 +13,7 @@ from sklearn.decomposition import PCA
 from sklearn.manifold import TSNE
 
 from utils.activation_utils.steering_layer import SteeringLayer
+import pickle
 
 class ActivationController(LLMController):
     def __init__(self, model, selected_layers='all', use_ddp=True, save_folder_path="."):
@@ -22,7 +23,7 @@ class ActivationController(LLMController):
         self.overwrite = True
 
         model = self.get_model()
-        layers = self.get_model().model.layers
+        layers = self.get_model().model.layers if 'gemma' not in self.model.name_or_path else self.get_model().layers
 
         for i in range(len(layers)):
             if not isinstance(layers[i], SteeringLayer):
@@ -115,7 +116,7 @@ class ActivationController(LLMController):
         aggregated_cpu_numpy = aggregated_gpu.detach().cpu().numpy()
         return aggregated_cpu_numpy
 
-    def extract_activations(self, texts, batch_size=10, aggregation_calc="last", activation_name='neutral'):
+    def extract_activations(self, texts, batch_size=5, aggregation_calc="last", activation_name='neutral'):
         # ---> Create DistributedSampler if DDP is active <---
         sampler = DistributedSampler(texts, shuffle=False) if self.is_ddp else None # 
         dataloader = DataLoader(texts, batch_size=batch_size, sampler=sampler)
@@ -147,6 +148,7 @@ class ActivationController(LLMController):
                 max_length=10000 # Adjust if needed
             ).to(self.model.device)
 
+
             # Run model forward pass for the batch
             with torch.no_grad():
                  # Need attention_mask for correct aggregation if padding exists
@@ -158,7 +160,7 @@ class ActivationController(LLMController):
                 if "self_attn" in self.selected_layers:
                     attention_out = False
 
-                outputs = self.model(**inputs, output_hidden_states=hidden_out, output_attentions=attention_out) # We only need activations via hooks
+                outputs = self.get_model()(**inputs, output_hidden_states=hidden_out, output_attentions=attention_out) # We only need activations via hooks
             
             
             # Collect activations from hooks for this batch
@@ -285,60 +287,9 @@ class ActivationController(LLMController):
 
         return steering_vector
 
-    def visualize_patched_saliency(self, texts, layer_name, save_path=None):
-
-        if save_path is not None:
-            plt.figure(figsize=(10, 6))
-            sns.heatmap(activations[layer_name], annot=True, cmap='coolwarm', fmt=".2f", vmin=0, vmax=1,
-                        xticklabels=texts, yticklabels=texts, cbar=False)
-            plt.title(f'{layer_name.upper()} Activations (Patched Saliency)')
-            plt.xlabel(f'{layer_name.upper()} Dimension 1')
-            plt.ylabel(f'{layer_name.upper()} Dimension 2')
-            plt.legend(title='Input Type')
-            plt.grid(True, linestyle='--', alpha=0.6)
-            plt.savefig(save_path)
-            plt.close()
-
-    def visualize_token_saliency(self, texts, layer_name, aggregation_calc="last", save_path=None):
-        activations = self.extract_activations(texts, aggregation_calc=aggregation_calc)
-        if save_path is not None:
-            plt.figure(figsize=(10, 6))
-            sns.heatmap(activations[layer_name], annot=True, cmap='coolwarm', fmt=".2f", vmin=0, vmax=1,
-                        xticklabels=texts, yticklabels=texts, cbar=False)
-            plt.title(f'{layer_name.upper()} Activations (Token Saliency)')
-            plt.xlabel(f'{layer_name.upper()} Dimension 1')
-            plt.ylabel(f'{layer_name.upper()} Dimension 2')
-            plt.legend(title='Input Type')
-            plt.grid(True, linestyle='--', alpha=0.6)
-            plt.savefig(save_path)
-            plt.close()
-
-    def plot_activation_projection(self, all_activations, layer_name, labels, method='tsne', perplexity=30):
-
-        activations_np = np.array(all_activations[layer_name]).squeeze()
-
-
-        print(f"Projecting activations for layer: {layer_name} (Shape: {activations_np.shape}) using {method.upper()}...")
-
-        if method == 'tsne':
-            reducer = TSNE(n_components=2, random_state=42, perplexity=min(perplexity, activations_np.shape[0] - 1)) # Perplexity must be less than n_samples
-        else:
-            raise ValueError(f"Unknown method: {method}")
-
-        projections = reducer.fit_transform(activations_np)
-
-        plt.figure(figsize=(8, 6))
-        proj_len = len(projections[:, 1])
-        proj_len2 = len(projections[:, 0])
-        print(f"projections[:, 1] length: {proj_len}")
-        print(f"projections[:, 0] length: {proj_len2}")
-        print(f"labels length: {len(labels)}")
-        sns.scatterplot(x=projections[:, 0], y=projections[:, 1], hue=labels, palette='viridis', s=50, alpha=0.8)
-        plt.title(f'{method.upper()} Projection of Activations\nLayer: {layer_name}{title_suffix}')
-        plt.xlabel(f'{method.upper()} Dimension 1')
-        plt.ylabel(f'{method.upper()} Dimension 2')
-        plt.legend(title='Input Type')
-        plt.grid(True, linestyle='--', alpha=0.6)
-        plt.show()
     def __exit__(self):
         self.clear_hooks()
+
+
+
+
