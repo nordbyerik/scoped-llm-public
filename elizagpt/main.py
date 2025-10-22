@@ -7,6 +7,11 @@ the classic psychotherapy simulation chatbot.
 """
 
 import sys
+import os
+
+# Add parent directory to path to allow imports from elizagpt package
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from elizagpt import Eliza
 
 
